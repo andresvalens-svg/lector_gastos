@@ -18,16 +18,17 @@ function hideMsg() {
 }
 
 async function listar() {
-  listStatus.textContent = 'Cargando…';
+  if (listStatus) listStatus.textContent = 'Cargando…';
   try {
     const res = await fetch(API);
-    const data = await res.json();
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await res.json() : { ok: false, error: 'Respuesta no válida' };
     if (!data.ok) throw new Error(data.error || 'Error al listar');
     const items = data.items || [];
     renderLista(items);
-    listStatus.textContent = items.length ? `${items.length} gasto(s)` : '';
+    if (listStatus) listStatus.textContent = items.length ? `${items.length} gasto(s)` : '';
   } catch (err) {
-    listStatus.textContent = '';
+    if (listStatus) listStatus.textContent = '';
     empty.textContent = 'No se pudo conectar al backend.';
     empty.classList.remove('hidden');
     lista.replaceChildren(empty);
@@ -62,7 +63,7 @@ function renderLista(items) {
           <p class="font-medium text-stone-900 truncate">${escapeHtml(g.concepto || 'Sin concepto')}</p>
           <p class="text-xs text-stone-500 mt-0.5">${formatFecha(g.fecha)} · ${escapeHtml(g.categoria || 'Otros')}${archivo}</p>
         </div>
-        <span class="text-amber-700 font-semibold shrink-0">${formatMonto(g.monto)}</span>
+        <span class="text-amber-700 font-semibold shrink-0">${formatMonto(g.monto ?? 0)}</span>
       `;
       return card;
     })
@@ -90,9 +91,10 @@ form.addEventListener('submit', async (e) => {
     const fd = new FormData();
     fd.append('documento', file);
     const res = await fetch(API, { method: 'POST', body: fd });
-    const data = await res.json();
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await res.json() : { ok: false, error: 'Error del servidor' };
     if (!data.ok) throw new Error(data.error || 'Error al procesar');
-    showMsg(`Guardado en la base de datos: ${data.concepto} — ${formatMonto(data.monto)}`);
+    showMsg(`Guardado en la base de datos: ${data.concepto || 'Sin concepto'} — ${formatMonto(data.monto ?? 0)}`);
     input.value = '';
     await listar();
   } catch (err) {

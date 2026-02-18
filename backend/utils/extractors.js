@@ -1,6 +1,5 @@
 import { createRequire } from 'module';
 import Tesseract from 'tesseract.js';
-import { readFile } from 'fs/promises';
 import { extname } from 'path';
 
 const require = createRequire(import.meta.url);

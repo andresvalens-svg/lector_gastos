@@ -16,7 +16,12 @@ const upload = multer({
 });
 
 // POST /api/documentos — subir y procesar (n8n: body form-data con campo "documento")
-router.post('/', upload.single('documento'), async (req, res) => {
+router.post('/', (req, res, next) => {
+  upload.single('documento')(req, res, (err) => {
+    if (err) return res.status(400).json({ ok: false, error: err.message });
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ ok: false, error: 'Falta el archivo (campo: documento)' });
@@ -64,6 +69,7 @@ router.get('/:id', async (req, res) => {
     if (!gasto) return res.status(404).json({ ok: false, error: 'No encontrado' });
     res.json({ ok: true, item: gasto });
   } catch (err) {
+    if (err.name === 'CastError') return res.status(400).json({ ok: false, error: 'ID inválido' });
     res.status(500).json({ ok: false, error: err.message });
   }
 });
