@@ -6,8 +6,11 @@ import documentosRouter from './routes/documentos.js';
 const PORT = process.env.PORT || 4000;
 
 const app = express();
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+  : true;
 app.use(cors({
-  origin: true,
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
 }));

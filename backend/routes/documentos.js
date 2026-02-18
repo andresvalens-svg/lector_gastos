@@ -5,8 +5,10 @@ import { extraerTexto, parsearDatos, isSupportedFile } from '../utils/extractors
 import { identificarCategoria } from '../utils/categorizer.js';
 
 const router = Router();
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const upload = multer({
   storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     if (!isSupportedFile(file.originalname)) {
       return cb(new Error('Solo se permiten PDF, JPEG o JPG'), false);
@@ -18,7 +20,10 @@ const upload = multer({
 // POST /api/documentos — subir y procesar (n8n: body form-data con campo "documento")
 router.post('/', (req, res, next) => {
   upload.single('documento')(req, res, (err) => {
-    if (err) return res.status(400).json({ ok: false, error: err.message });
+    if (err) {
+      const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return res.status(status).json({ ok: false, error: err.message || 'Archivo no válido' });
+    }
     next();
   });
 }, async (req, res) => {

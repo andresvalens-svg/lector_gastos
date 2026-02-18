@@ -1,4 +1,11 @@
-const API = (window.APP_API_URL || 'https://lector-gastos.onrender.com') + '/api/documentos';
+const API_BASE = window.APP_API_URL || 'https://lector-gastos.onrender.com';
+const API = API_BASE + '/api/documentos';
+const isLocalAPI = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(API_BASE);
+function fetchOpts(extra = {}) {
+  const opts = { ...extra };
+  if (isLocalAPI) opts.targetAddressSpace = 'local';
+  return opts;
+}
 
 const form = document.getElementById('form');
 const btnSubmit = document.getElementById('btnSubmit');
@@ -20,7 +27,7 @@ function hideMsg() {
 async function listar() {
   if (listStatus) listStatus.textContent = 'Cargando…';
   try {
-    const res = await fetch(API);
+    const res = await fetch(API, fetchOpts());
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('application/json') ? await res.json() : { ok: false, error: 'Respuesta no válida' };
     if (!data.ok) throw new Error(data.error || 'Error al listar');
@@ -90,7 +97,7 @@ form.addEventListener('submit', async (e) => {
   try {
     const fd = new FormData();
     fd.append('documento', file);
-    const res = await fetch(API, { method: 'POST', body: fd });
+    const res = await fetch(API, fetchOpts({ method: 'POST', body: fd }));
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('application/json') ? await res.json() : { ok: false, error: 'Error del servidor' };
     if (!data.ok) throw new Error(data.error || 'Error al procesar');
