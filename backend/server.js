@@ -6,7 +6,11 @@ import documentosRouter from './routes/documentos.js';
 const PORT = process.env.PORT || 4000;
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true,
+}));
 app.use(express.json());
 
 app.use('/api/documentos', documentosRouter);

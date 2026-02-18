@@ -1,4 +1,4 @@
-const API = (window.APP_API_URL || 'http://localhost:7000') + '/api/documentos';
+const API = (window.APP_API_URL || 'https://lector-gastos.onrender.com') + '/api/documentos';
 
 const form = document.getElementById('form');
 const btnSubmit = document.getElementById('btnSubmit');
