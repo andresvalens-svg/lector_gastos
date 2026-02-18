@@ -31,7 +31,7 @@ async function start() {
   }
   await connectDB(process.env.MONGODB_URI);
   console.log('MongoDB conectado');
-  app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
+  app.listen(PORT, () => console.log(`Servidor escuchando en puerto ${PORT}`));
 }
 
 start().catch((err) => {
