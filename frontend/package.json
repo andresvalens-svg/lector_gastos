@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "npx tailwindcss -i src/input.css -o css/output.css",
+    "build": "npx tailwindcss -i src/input.css -o css/output.css && node scripts/inject-env.js",
     "dev": "npm run build && npx serve . -p 3000",
     "start": "npx serve . -p 3000"
   },

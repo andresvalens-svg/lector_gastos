@@ -1,4 +1,5 @@
-const API = 'https://lector-gastos.onrender.com/api/documentos';
+// API inyectada en build (VITE_API_URL en Vercel, fallback Render)
+const API = '__API_BASE__' + '/api/documentos';
 function fetchOpts(extra = {}) {
   return { ...extra };
 }
