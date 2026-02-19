@@ -1,12 +1,6 @@
-const RENDER_API = 'https://lector-gastos.onrender.com';
-const isProduction = typeof location !== 'undefined' && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(location.origin);
-const API_BASE = isProduction ? RENDER_API : (window.APP_API_URL || RENDER_API);
-const API = API_BASE + '/api/documentos';
-const isLocalAPI = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(API_BASE);
+const API = 'https://lector-gastos.onrender.com/api/documentos';
 function fetchOpts(extra = {}) {
-  const opts = { ...extra };
-  if (isLocalAPI) opts.targetAddressSpace = 'local';
-  return opts;
+  return { ...extra };
 }
 
 const form = document.getElementById('form');
