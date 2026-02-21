@@ -10,32 +10,42 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    .step { transition: opacity 0.4s ease, transform 0.4s ease; }
+    .step.hidden { opacity: 0; pointer-events: none; position: absolute; transform: translateX(-20px); }
+    .step.visible { opacity: 1; transform: translateX(0); }
+    .step.next { transform: translateX(20px); }
+  </style>
 </head>
-<body class="font-sans bg-stone-100 min-h-screen text-stone-800">
-  <div class="max-w-3xl mx-auto px-4 py-8">
-    <header class="mb-8">
-      <h1 class="text-2xl font-bold text-stone-900">Lector de Gastos</h1>
-      <p class="text-stone-600 text-sm mt-1">Arrastra o selecciona archivos (CSV, Excel, HTML, PDF, JPG, PNG). Se procesan automáticamente.</p>
-    </header>
-
-    <section class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 mb-6">
-      <div id="dropZone" class="border-2 border-dashed border-stone-300 rounded-xl p-8 text-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-colors">
-        <p class="text-stone-600 text-sm mb-2">Arrastra archivos aquí o haz clic para seleccionar</p>
-        <p class="text-xs text-stone-400">CSV, Excel (.xlsx, .xls), HTML, PDF, JPG, JPEG, PNG</p>
-        <input type="file" id="fileInput" name="documento" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" class="hidden" />
+<body class="font-sans bg-stone-50 min-h-screen text-stone-800 antialiased">
+  <div class="min-h-screen flex flex-col items-center justify-center px-4 py-12 relative">
+    <!-- Paso 1: Subir archivo -->
+    <section id="step1" class="step visible w-full max-w-xl">
+      <h1 class="text-2xl font-bold text-stone-900 text-center mb-2">Lector de Gastos</h1>
+      <p class="text-stone-500 text-sm text-center mb-8">Arrastra o selecciona un archivo para procesar</p>
+      <div id="dropZone" class="border-2 border-dashed border-stone-300 rounded-2xl p-12 text-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-colors bg-white shadow-sm">
+        <p class="text-stone-600 text-sm mb-1">Arrastra aquí o haz clic</p>
+        <p class="text-xs text-stone-400">CSV, Excel, HTML, PDF, JPG, PNG</p>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" class="hidden" />
       </div>
-      <p id="mensaje" class="mt-3 text-sm hidden"></p>
+      <p id="mensaje" class="mt-4 text-sm text-center hidden"></p>
     </section>
 
-    <section class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
-      <div class="flex items-center justify-between gap-4 flex-wrap">
-        <h2 class="text-lg font-semibold text-stone-900">Gastos registrados</h2>
-        <a id="btnExport" href="#" download="gastos.xlsx" class="inline-flex items-center gap-2 py-2 px-4 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
+    <!-- Paso 2: Listado + descarga -->
+    <section id="step2" class="step hidden w-full max-w-2xl">
+      <h2 class="text-xl font-bold text-stone-900 mb-2">Gastos registrados</h2>
+      <p id="archivoInfo" class="text-sm text-stone-500 mb-4"></p>
+      <div class="flex items-center justify-between gap-4 mb-4 flex-wrap">
+        <button id="btnOtro" type="button" class="text-sm text-amber-600 hover:text-amber-700 font-medium">← Subir otro archivo</button>
+        <a id="btnExport" href="#" class="inline-flex items-center gap-2 py-2.5 px-5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 shadow-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           Descargar Excel
         </a>
       </div>
-      <p id="exportStatus" class="mt-2 text-xs text-stone-500"></p>
+      <div id="lista" class="space-y-2 max-h-80 overflow-y-auto bg-white rounded-xl border border-stone-200 p-4">
+        <p id="empty" class="text-stone-500 text-sm">Cargando…</p>
+      </div>
+      <p id="exportStatus" class="mt-3 text-xs text-stone-500"></p>
     </section>
   </div>
 
