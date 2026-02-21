@@ -1,4 +1,4 @@
-const API = 'https://lector-gastos.onrender.com/api/documentos';
+const API = 'https://lector-gastos.onrender.com/api/documentos'; // Forzar nuevo deploy en Vercel
 function fetchOpts(extra = {}) {
   return { ...extra };
 }
