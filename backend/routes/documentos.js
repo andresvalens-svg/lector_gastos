@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
+import XLSX from 'xlsx';
 import { Gasto } from '../models/Gasto.js';
-import { extraerTexto, parsearDatos, isSupportedFile } from '../utils/extractors.js';
+import { extraerDatos, isSupportedFile } from '../utils/extractors.js';
 import { identificarCategoria } from '../utils/categorizer.js';
 
 const router = Router();
@@ -11,13 +12,13 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     if (!isSupportedFile(file.originalname)) {
-      return cb(new Error('Solo se permiten PDF, JPEG o JPG'), false);
+      return cb(new Error('Solo se permiten CSV, Excel, HTML, PDF, JPG, JPEG, PNG'), false);
     }
     cb(null, true);
   },
 });
 
-// POST /api/documentos — subir y procesar (n8n: body form-data con campo "documento")
+// POST /api/documentos — subir y procesar
 router.post('/', (req, res, next) => {
   upload.single('documento')(req, res, (err) => {
     if (err) {
@@ -32,32 +33,59 @@ router.post('/', (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Falta el archivo (campo: documento)' });
     }
     const buffer = req.file.buffer;
-    const texto = await extraerTexto(buffer, req.file.mimetype);
-    const { fecha, monto, concepto } = parsearDatos(texto);
-    const categoria = identificarCategoria(concepto, texto);
-    const gasto = new Gasto({
-      fecha,
-      monto,
-      concepto,
-      categoria,
-      archivo: req.file.originalname,
-      textoExtraido: texto.slice(0, 2000),
-    });
-    await gasto.save();
-    res.status(201).json({
-      ok: true,
-      id: gasto._id,
-      fecha: gasto.fecha,
-      monto: gasto.monto,
-      concepto: gasto.concepto,
-      categoria: gasto.categoria,
-    });
+    const mimetype = req.file.mimetype;
+    const filename = req.file.originalname;
+    const datos = await extraerDatos(buffer, mimetype, filename);
+    const saved = [];
+    for (const { fecha, monto, concepto } of datos) {
+      const categoria = identificarCategoria(concepto, '');
+      const gasto = new Gasto({
+        fecha,
+        monto,
+        concepto,
+        categoria,
+        archivo: filename,
+        textoExtraido: '',
+      });
+      await gasto.save();
+      saved.push({ id: gasto._id, fecha: gasto.fecha, monto: gasto.monto, concepto: gasto.concepto, categoria: gasto.categoria });
+    }
+    if (saved.length === 1) {
+      return res.status(201).json({ ok: true, id: saved[0].id, fecha: saved[0].fecha, monto: saved[0].monto, concepto: saved[0].concepto, categoria: saved[0].categoria });
+    }
+    res.status(201).json({ ok: true, items: saved, count: saved.length });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// GET /api/documentos — listar todos (n8n: GET sin body)
+// GET /api/documentos/export/excel — exportar gastos a Excel
+router.get('/export/excel', async (_req, res) => {
+  try {
+    const gastos = await Gasto.find().sort({ creadoEn: -1 }).lean();
+    const rows = [
+      ['Fecha', 'Monto (MXN)', 'Concepto', 'Categoría', 'Archivo'],
+      ...gastos.map(g => [
+        g.fecha ? new Date(g.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+        g.monto ?? 0,
+        g.concepto ?? '',
+        g.categoria ?? 'Otros',
+        g.archivo ?? '',
+      ]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=gastos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/documentos — listar todos
 router.get('/', async (_req, res) => {
   try {
     const gastos = await Gasto.find().sort({ creadoEn: -1 }).lean();
@@ -67,7 +95,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-// GET /api/documentos/:id — uno por id (n8n: GET con id en URL)
+// GET /api/documentos/:id — uno por id
 router.get('/:id', async (req, res) => {
   try {
     const gasto = await Gasto.findById(req.params.id).lean();
