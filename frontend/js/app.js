@@ -7,12 +7,16 @@ function fetchOpts(extra = {}) {
 const step1 = document.getElementById('step1');
 const step2 = document.getElementById('step2');
 const dropZone = document.getElementById('dropZone');
+const dropZone2 = document.getElementById('dropZone2');
 const fileInput = document.getElementById('fileInput');
+const fileInput2 = document.getElementById('fileInput2');
 const mensaje = document.getElementById('mensaje');
+const step1Actions = document.getElementById('step1Actions');
+const btnVerResultados = document.getElementById('btnVerResultados');
+const btnInicio = document.getElementById('btnInicio');
 const archivoInfo = document.getElementById('archivoInfo');
 const lista = document.getElementById('lista');
 const empty = document.getElementById('empty');
-const btnOtro = document.getElementById('btnOtro');
 const btnExport = document.getElementById('btnExport');
 const exportStatus = document.getElementById('exportStatus');
 
@@ -43,7 +47,9 @@ function goToStep1() {
   step1.classList.remove('hidden', 'next');
   step1.classList.add('visible');
   hideMsg();
+  step1Actions.classList.add('hidden');
   fileInput.value = '';
+  fileInput2.value = '';
 }
 
 function formatFecha(d) {
@@ -128,17 +134,20 @@ async function procesarUnArchivo(file) {
   return data;
 }
 
-async function procesarArchivos(files) {
+async function procesarArchivos(files, options = {}) {
+  const { goToResults = true } = options;
   const arr = Array.from(files || []).filter(f => f && f.name);
   if (arr.length === 0) return;
-  hideMsg();
-  dropZone.classList.add('opacity-75', 'pointer-events-none');
-  const nombres = arr.map(f => f.name);
+  const zone = options.zone || dropZone;
+  const isStep2 = zone === dropZone2;
+  if (!isStep2) hideMsg();
+  zone.classList.add('opacity-75', 'pointer-events-none');
   const exitosos = [];
   const errores = [];
   for (let i = 0; i < arr.length; i++) {
     const file = arr[i];
-    showMsg(`Procesando ${i + 1}/${arr.length}: «${escapeHtml(file.name)}»…`, false);
+    const msg = `Procesando ${i + 1}/${arr.length}: «${escapeHtml(file.name)}»…`;
+    if (isStep2) setExportStatus(msg); else showMsg(msg, false);
     try {
       await procesarUnArchivo(file);
       exitosos.push(file.name);
@@ -146,48 +155,58 @@ async function procesarArchivos(files) {
       errores.push(`${file.name}: ${err.message}`);
     }
   }
-  dropZone.classList.remove('opacity-75', 'pointer-events-none');
-  archivoInfo.textContent = exitosos.length > 0
+  zone.classList.remove('opacity-75', 'pointer-events-none');
+  const info = exitosos.length > 0
     ? `Archivos procesados: ${exitosos.join(', ')}${errores.length > 0 ? ` · Errores: ${errores.join('; ')}` : ''}`
     : (errores.length > 0 ? `No se procesó ningún archivo. ${errores.join('; ')}` : '');
-  if (errores.length > 0) showMsg(errores.join(' · '), true);
-  else hideMsg();
+  archivoInfo.textContent = info;
+  if (errores.length > 0) {
+    if (isStep2) setExportStatus(errores.join(' · ')); else showMsg(errores.join(' · '), true);
+  } else if (goToResults) {
+    if (!isStep2) hideMsg();
+    if (isStep2) setExportStatus('');
+  } else {
+    if (isStep2) setExportStatus(''); else showMsg(`${exitosos.length} archivo(s) listo(s). Puedes agregar más o ver resultados.`, false);
+  }
   await listar();
-  goToStep2();
+  if (goToResults) goToStep2();
+  else step1Actions.classList.remove('hidden');
 }
 
-function handleFiles(files) {
+function handleFiles(files, options = {}) {
   const arr = Array.from(files || []).filter(f => f && f.name);
   if (arr.length === 0) return;
-  procesarArchivos(arr);
+  procesarArchivos(arr, options);
 }
 
-dropZone.addEventListener('click', () => fileInput.click());
+function setupDropZone(el, input, options = {}) {
+  el.addEventListener('click', () => input.click());
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.add('drop-zone-active');
+  });
+  el.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    el.classList.remove('drop-zone-active');
+  });
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove('drop-zone-active');
+    handleFiles(e.dataTransfer?.files, options);
+  });
+  input.addEventListener('change', (e) => {
+    handleFiles(e.target.files, options);
+    e.target.value = '';
+  });
+}
 
-dropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  dropZone.classList.add('drop-zone-active');
-});
+setupDropZone(dropZone, fileInput, { goToResults: false });
+setupDropZone(dropZone2, fileInput2, { goToResults: false, zone: dropZone2 });
 
-dropZone.addEventListener('dragleave', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('drop-zone-active');
-});
-
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  dropZone.classList.remove('drop-zone-active');
-  handleFiles(e.dataTransfer?.files);
-});
-
-fileInput.addEventListener('change', (e) => {
-  handleFiles(e.target.files);
-  e.target.value = '';
-});
-
-btnOtro.addEventListener('click', goToStep1);
+btnVerResultados.addEventListener('click', goToStep2);
+btnInicio.addEventListener('click', goToStep1);
 
 btnExport.addEventListener('click', async (e) => {
   e.preventDefault();

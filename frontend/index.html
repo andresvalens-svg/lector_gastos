@@ -39,8 +39,11 @@
       </div>
       <div id="dropZone" class="border-2 border-dashed border-[var(--nodo-border)] rounded-2xl p-14 text-center cursor-pointer transition-all duration-200 bg-[var(--nodo-card)] shadow-sm hover:border-[var(--nodo-soft)] hover:bg-[#fdfcfa]">
         <p class="text-[var(--nodo-text)] font-medium mb-1">Arrastra varios archivos aquí o haz clic para seleccionar</p>
-        <p class="text-[var(--nodo-text-muted)] text-sm mt-2">CSV, Excel, HTML, PDF, JPG, PNG · Sin límite de archivos</p>
+        <p class="text-[var(--nodo-text-muted)] text-sm mt-2">CSV, Excel, HTML, PDF, JPG, PNG · Puedes agregar más antes de ver resultados</p>
         <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" multiple class="hidden" />
+      </div>
+      <div id="step1Actions" class="mt-5 hidden">
+        <button id="btnVerResultados" type="button" class="w-full py-3 px-6 rounded-xl bg-[var(--nodo-accent)] text-white font-medium hover:opacity-90 transition-opacity">Ver resultados y descargar Excel →</button>
       </div>
       <p id="mensaje" class="mt-5 text-sm text-center hidden"></p>
     </section>
@@ -48,11 +51,17 @@
     <!-- Paso 2: Listado + descarga -->
     <section id="step2" class="step hidden w-full max-w-3xl">
       <div class="mb-6">
-        <h2 class="text-2xl font-bold text-[var(--nodo-text)]">Gastos registrados</h2>
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <h2 class="text-2xl font-bold text-[var(--nodo-text)]">Gastos registrados</h2>
+          <button id="btnInicio" type="button" class="text-sm text-[var(--nodo-text-muted)] hover:text-[var(--nodo-accent)]">← Volver a inicio</button>
+        </div>
         <p id="archivoInfo" class="text-[var(--nodo-text-muted)] text-sm mt-2"></p>
       </div>
-      <div class="flex items-center justify-between gap-4 mb-5 flex-wrap">
-        <button id="btnOtro" type="button" class="text-sm text-[var(--nodo-accent)] hover:underline font-medium">← Subir más archivos</button>
+      <div id="dropZone2" class="border-2 border-dashed border-[var(--nodo-border)] rounded-xl p-4 mb-5 text-center cursor-pointer transition-all bg-[var(--nodo-card)] hover:border-[var(--nodo-soft)] hover:bg-[#fdfcfa]">
+        <p class="text-[var(--nodo-text-muted)] text-sm">Arrastra o haz clic para agregar más archivos</p>
+        <input type="file" id="fileInput2" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" multiple class="hidden" />
+      </div>
+      <div class="flex justify-end mb-5">
         <a id="btnExport" href="#" class="inline-flex items-center gap-2 py-3 px-6 rounded-xl bg-[var(--nodo-accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           Descargar Excel
