@@ -107,4 +107,16 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/documentos/:id — eliminar gasto
+router.delete('/:id', async (req, res) => {
+  try {
+    const gasto = await Gasto.findByIdAndDelete(req.params.id);
+    if (!gasto) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.name === 'CastError') return res.status(400).json({ ok: false, error: 'ID inválido' });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 export default router;
