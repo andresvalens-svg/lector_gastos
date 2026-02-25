@@ -107,7 +107,23 @@ async function eliminarGasto(id) {
   }
 }
 
-function renderLista(items) {
+async function actualizarCategoria(id, categoria) {
+  try {
+    const res = await fetch(`${API}/${id}`, fetchOpts({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoria }),
+    }));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Error al actualizar');
+    await listar();
+  } catch (err) {
+    setExportStatus(err.message || 'No se pudo actualizar.');
+    setTimeout(() => setExportStatus(''), 3000);
+  }
+}
+
+function renderLista(items, categorias = []) {
   if (!items || items.length === 0) {
     empty.textContent = 'Aún no hay gastos registrados. Sube archivos para comenzar.';
     empty.classList.remove('hidden');
@@ -115,6 +131,7 @@ function renderLista(items) {
     return;
   }
   empty.classList.add('hidden');
+  const baseCat = categorias.length ? categorias : ['Supermercado', 'Restaurantes', 'Transporte', 'Servicios', 'Salud', 'Entretenimiento', 'Educación', 'Hogar', 'Bancos', 'Otros'];
   lista.replaceChildren(
     ...items.map((g) => {
       const card = document.createElement('div');
@@ -123,10 +140,23 @@ function renderLista(items) {
       card.style.borderColor = 'var(--border)';
       const archivo = g.archivo ? ` · ${escapeHtml(g.archivo)}` : '';
       const id = g._id || g.id;
+      const cat = g.categoria || 'Otros';
+      const opts = [...baseCat];
+      if (cat && !opts.includes(cat)) opts.push(cat);
+      const selectId = `cat-${String(id).replace(/[^a-zA-Z0-9-]/g, '_')}`;
+      const inputId = `newcat-${String(id).replace(/[^a-zA-Z0-9-]/g, '_')}`;
+      const optionsHtml = opts.map((c) => `<option value="${escapeHtml(c)}" ${c === cat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
       card.innerHTML = `
         <div class="min-w-0 flex-1">
           <p class="font-medium truncate" style="color: var(--text);">${escapeHtml(g.concepto || 'Sin concepto')}</p>
-          <p class="text-xs text-muted mt-0.5">${formatFecha(g.fecha)} · ${escapeHtml(g.categoria || 'Otros')}${archivo}</p>
+          <p class="text-xs text-muted mt-0.5">${formatFecha(g.fecha)}${archivo}</p>
+          <div class="mt-2 flex items-center gap-2 flex-wrap">
+            <select id="${selectId}" class="text-xs rounded-lg border px-2 py-1.5 bg-white" style="border-color: var(--border); color: var(--text); max-width: 100%;">
+              ${optionsHtml}
+              <option value="__nueva__">—— Crear categoría ——</option>
+            </select>
+            <input type="text" id="${inputId}" placeholder="Nueva categoría" class="hidden text-xs rounded-lg border px-2 py-1.5 w-32" style="border-color: var(--border);" />
+          </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span class="text-accent font-semibold">${formatMonto(g.monto ?? 0)}</span>
@@ -135,8 +165,32 @@ function renderLista(items) {
           </button>
         </div>
       `;
+      const sel = card.querySelector(`#${selectId}`);
+      const inp = card.querySelector(`#${inputId}`);
       const btnDel = card.querySelector('button[data-id]');
       if (btnDel) btnDel.addEventListener('click', () => eliminarGasto(id));
+      sel.addEventListener('change', () => {
+        if (sel.value === '__nueva__') {
+          inp.classList.remove('hidden');
+          inp.focus();
+        } else {
+          actualizarCategoria(id, sel.value);
+        }
+      });
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const v = inp.value.trim();
+          if (v) actualizarCategoria(id, v);
+          inp.classList.add('hidden');
+          inp.value = '';
+        }
+      });
+      inp.addEventListener('blur', () => {
+        const v = inp.value.trim();
+        if (v) actualizarCategoria(id, v);
+        inp.classList.add('hidden');
+        inp.value = '';
+      });
       return card;
     })
   );
@@ -145,11 +199,14 @@ function renderLista(items) {
 async function listar() {
   showProgress('Cargando gastos…', null);
   try {
-    const res = await fetch(API, fetchOpts());
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : { ok: false };
+    const [resGastos, resCat] = await Promise.all([
+      fetch(API, fetchOpts()),
+      fetch(`${API}/categorias`, fetchOpts()),
+    ]);
+    const data = resGastos.headers.get('content-type')?.includes('application/json') ? await resGastos.json() : { ok: false };
+    const dataCat = resCat.ok && resCat.headers.get('content-type')?.includes('application/json') ? await resCat.json() : null;
     if (!data.ok) throw new Error('Error al listar');
-    renderLista(data.items || []);
+    renderLista(data.items || [], dataCat?.categorias || []);
   } catch (_) {
     renderLista([]);
   } finally {

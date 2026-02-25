@@ -4,7 +4,7 @@ import XLSX from 'xlsx';
 import { Gasto } from '../models/Gasto.js';
 import { extraerDatos, isSupportedFile } from '../utils/extractors.js';
 import { identificarCategoria } from '../utils/categorizer.js';
-import { interpretarGastosConIA } from '../utils/aiService.js';
+import { interpretarGastosConIA, extraerConceptosDeDocumento, CATEGORIAS } from '../utils/aiService.js';
 
 const router = Router();
 const upload = multer({
@@ -32,7 +32,13 @@ router.post('/', (req, res, next) => {
     const buffer = req.file.buffer;
     const mimetype = req.file.mimetype;
     const filename = req.file.originalname;
-    const datos = await extraerDatos(buffer, mimetype, filename);
+    let datos = await extraerDatos(buffer, mimetype, filename);
+    const isDocText = /^(application\/pdf|image\/|text\/html)/.test(mimetype);
+    if (isDocText && datos.length === 1 && (datos[0].textoOriginal || '').length > 80) {
+      const extraidos = await extraerConceptosDeDocumento(datos[0].textoOriginal);
+      if (extraidos?.length) datos = extraidos.map((e) => ({ ...e, textoOriginal: e.concepto + ' ' + e.monto }));
+    }
+    if (!datos.length) datos = [{ fecha: new Date(), monto: 0, concepto: 'Sin concepto', textoOriginal: '' }];
     const textos = datos.map((d) => d.textoOriginal || `${d.concepto || ''} ${d.monto ?? ''}`.trim() || 'Sin concepto');
     const aiResult = await interpretarGastosConIA(textos);
     const saved = [];
@@ -40,13 +46,13 @@ router.post('/', (req, res, next) => {
       const d = datos[i];
       const ai = aiResult?.[i];
       const monto = (ai?.monto >= 0 ? Math.round(ai.monto * 100) / 100 : null) ?? d.monto ?? 0;
-      const categoria = ai?.categoria || identificarCategoria(d.concepto, '');
+      const categoria = (d.categoria && d.categoria.trim()) || ai?.categoria || identificarCategoria(d.concepto, '');
       const gasto = new Gasto({
         sessionId,
-        fecha: d.fecha,
+        fecha: d.fecha || new Date(),
         monto,
         concepto: d.concepto,
-        categoria,
+        categoria: categoria.trim() || 'Otros',
         archivo: filename,
         textoExtraido: '',
       });
@@ -95,6 +101,34 @@ router.get('/', async (req, res) => {
     const gastos = await Gasto.find(sessionId ? { sessionId } : {}).sort({ creadoEn: -1 }).lean();
     res.json({ ok: true, items: gastos });
   } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/categorias', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || '';
+    const custom = sessionId ? await Gasto.distinct('categoria', { sessionId, categoria: { $nin: CATEGORIAS } }) : [];
+    res.json({ ok: true, categorias: [...CATEGORIAS, ...custom.filter(Boolean)] });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.patch('/:id', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || '';
+    const { categoria } = req.body || {};
+    if (typeof categoria !== 'string' || !categoria.trim()) return res.status(400).json({ ok: false, error: 'categoria requerida' });
+    const gasto = await Gasto.findOneAndUpdate(
+      { _id: req.params.id, ...(sessionId ? { sessionId } : {}) },
+      { $set: { categoria: categoria.trim() } },
+      { new: true }
+    ).lean();
+    if (!gasto) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    res.json({ ok: true, item: gasto });
+  } catch (err) {
+    if (err.name === 'CastError') return res.status(400).json({ ok: false, error: 'ID inválido' });
     res.status(500).json({ ok: false, error: err.message });
   }
 });

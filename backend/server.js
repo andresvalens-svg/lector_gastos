@@ -11,7 +11,7 @@ const allowedOrigins = process.env.CORS_ORIGIN
   : true;
 app.use(cors({
   origin: allowedOrigins,
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
 app.use(express.json());
