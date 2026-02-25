@@ -107,12 +107,12 @@ async function eliminarGasto(id) {
   }
 }
 
-async function actualizarCategoria(id, categoria) {
+async function actualizarGasto(id, payload) {
   try {
     const res = await fetch(`${API}/${id}`, fetchOpts({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ categoria }),
+      body: JSON.stringify(payload),
     }));
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) throw new Error(data.error || 'Error al actualizar');
@@ -141,16 +141,22 @@ function renderLista(items, categorias = []) {
       const archivo = g.archivo ? ` · ${escapeHtml(g.archivo)}` : '';
       const id = g._id || g.id;
       const cat = g.categoria || 'Otros';
+      const tipo = g.tipo === 'ingreso' ? 'ingreso' : 'gasto';
       const opts = [...baseCat];
       if (cat && !opts.includes(cat)) opts.push(cat);
       const selectId = `cat-${String(id).replace(/[^a-zA-Z0-9-]/g, '_')}`;
       const inputId = `newcat-${String(id).replace(/[^a-zA-Z0-9-]/g, '_')}`;
+      const tipoSelectId = `tipo-${String(id).replace(/[^a-zA-Z0-9-]/g, '_')}`;
       const optionsHtml = opts.map((c) => `<option value="${escapeHtml(c)}" ${c === cat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
       card.innerHTML = `
         <div class="min-w-0 flex-1">
           <p class="font-medium truncate" style="color: var(--text);">${escapeHtml(g.concepto || 'Sin concepto')}</p>
           <p class="text-xs text-muted mt-0.5">${formatFecha(g.fecha)}${archivo}</p>
           <div class="mt-2 flex items-center gap-2 flex-wrap">
+            <select id="${tipoSelectId}" class="text-xs rounded-lg border px-2 py-1.5 bg-white" style="border-color: var(--border); color: var(--text);">
+              <option value="gasto" ${tipo === 'gasto' ? 'selected' : ''}>Gasto</option>
+              <option value="ingreso" ${tipo === 'ingreso' ? 'selected' : ''}>Ingreso</option>
+            </select>
             <select id="${selectId}" class="text-xs rounded-lg border px-2 py-1.5 bg-white" style="border-color: var(--border); color: var(--text); max-width: 100%;">
               ${optionsHtml}
               <option value="__nueva__">—— Crear categoría ——</option>
@@ -159,7 +165,7 @@ function renderLista(items, categorias = []) {
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <span class="text-accent font-semibold">${formatMonto(g.monto ?? 0)}</span>
+          <span class="font-semibold ${tipo === 'ingreso' ? 'text-green-600' : 'text-accent'}">${tipo === 'ingreso' ? '+' : ''}${formatMonto(g.monto ?? 0)}</span>
           <button type="button" data-id="${escapeHtml(String(id))}" class="p-1.5 rounded-lg text-muted hover:bg-red-100 hover:text-red-600 transition-colors" title="Eliminar">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
           </button>
@@ -167,27 +173,29 @@ function renderLista(items, categorias = []) {
       `;
       const sel = card.querySelector(`#${selectId}`);
       const inp = card.querySelector(`#${inputId}`);
+      const tipoSel = card.querySelector(`#${tipoSelectId}`);
       const btnDel = card.querySelector('button[data-id]');
       if (btnDel) btnDel.addEventListener('click', () => eliminarGasto(id));
+      if (tipoSel) tipoSel.addEventListener('change', () => actualizarGasto(id, { tipo: tipoSel.value }));
       sel.addEventListener('change', () => {
         if (sel.value === '__nueva__') {
           inp.classList.remove('hidden');
           inp.focus();
         } else {
-          actualizarCategoria(id, sel.value);
+          actualizarGasto(id, { categoria: sel.value });
         }
       });
       inp.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           const v = inp.value.trim();
-          if (v) actualizarCategoria(id, v);
+          if (v) actualizarGasto(id, { categoria: v });
           inp.classList.add('hidden');
           inp.value = '';
         }
       });
       inp.addEventListener('blur', () => {
         const v = inp.value.trim();
-        if (v) actualizarCategoria(id, v);
+        if (v) actualizarGasto(id, { categoria: v });
         inp.classList.add('hidden');
         inp.value = '';
       });

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import XLSX from 'xlsx';
 import { Gasto } from '../models/Gasto.js';
-import { extraerDatos, isSupportedFile } from '../utils/extractors.js';
+import { extraerDatos, extraerTexto, resolveMime, isSupportedFile } from '../utils/extractors.js';
 import { identificarCategoria } from '../utils/categorizer.js';
 import { interpretarGastosConIA, extraerConceptosDeDocumento, CATEGORIAS } from '../utils/aiService.js';
 
@@ -32,35 +32,46 @@ router.post('/', (req, res, next) => {
     const buffer = req.file.buffer;
     const mimetype = req.file.mimetype;
     const filename = req.file.originalname;
-    let datos = await extraerDatos(buffer, mimetype, filename);
-    const isDocText = /^(application\/pdf|image\/|text\/html)/.test(mimetype);
-    if (isDocText && datos.length === 1 && (datos[0].textoOriginal || '').length > 80) {
-      const extraidos = await extraerConceptosDeDocumento(datos[0].textoOriginal);
-      if (extraidos?.length) datos = extraidos.map((e) => ({ ...e, textoOriginal: e.concepto + ' ' + e.monto }));
+    const mime = resolveMime(mimetype, filename);
+    const isDocText = /^(application\/pdf|image\/|text\/html)/.test(mime);
+    let datos;
+    if (isDocText) {
+      const texto = await extraerTexto(buffer, mime);
+      const extraidos = texto?.trim() ? await extraerConceptosDeDocumento(texto) : null;
+      if (extraidos?.length) {
+        datos = extraidos.map((e) => ({ ...e, textoOriginal: (e.concepto || '') + ' ' + (e.monto ?? '') }));
+      } else {
+        datos = await extraerDatos(buffer, mimetype, filename);
+      }
+    } else {
+      datos = await extraerDatos(buffer, mimetype, filename);
     }
     if (!datos.length) datos = [{ fecha: new Date(), monto: 0, concepto: 'Sin concepto', textoOriginal: '' }];
+    const yaExtraidoConIA = datos.every((d) => d.categoria && d.categoria.trim());
     const textos = datos.map((d) => d.textoOriginal || `${d.concepto || ''} ${d.monto ?? ''}`.trim() || 'Sin concepto');
-    const aiResult = await interpretarGastosConIA(textos);
+    const aiResult = yaExtraidoConIA ? null : await interpretarGastosConIA(textos);
     const saved = [];
     for (let i = 0; i < datos.length; i++) {
       const d = datos[i];
       const ai = aiResult?.[i];
       const monto = (ai?.monto >= 0 ? Math.round(ai.monto * 100) / 100 : null) ?? d.monto ?? 0;
       const categoria = (d.categoria && d.categoria.trim()) || ai?.categoria || identificarCategoria(d.concepto, '');
+      const tipo = (d.tipo === 'ingreso' || ai?.tipo === 'ingreso') ? 'ingreso' : 'gasto';
       const gasto = new Gasto({
         sessionId,
         fecha: d.fecha || new Date(),
         monto,
+        tipo,
         concepto: d.concepto,
         categoria: categoria.trim() || 'Otros',
         archivo: filename,
         textoExtraido: '',
       });
       await gasto.save();
-      saved.push({ id: gasto._id, fecha: gasto.fecha, monto: gasto.monto, concepto: gasto.concepto, categoria: gasto.categoria });
+      saved.push({ id: gasto._id, fecha: gasto.fecha, monto: gasto.monto, tipo: gasto.tipo, concepto: gasto.concepto, categoria: gasto.categoria });
     }
     if (saved.length === 1) {
-      return res.status(201).json({ ok: true, id: saved[0].id, fecha: saved[0].fecha, monto: saved[0].monto, concepto: saved[0].concepto, categoria: saved[0].categoria });
+      return res.status(201).json({ ok: true, id: saved[0].id, fecha: saved[0].fecha, monto: saved[0].monto, tipo: saved[0].tipo, concepto: saved[0].concepto, categoria: saved[0].categoria });
     }
     res.status(201).json({ ok: true, items: saved, count: saved.length });
   } catch (err) {
@@ -74,9 +85,10 @@ router.get('/export/excel', async (req, res) => {
     if (!sessionId) return;
     const gastos = await Gasto.find({ sessionId }).sort({ creadoEn: -1 }).lean();
     const rows = [
-      ['Fecha', 'Monto (MXN)', 'Concepto', 'Categoría', 'Archivo'],
+      ['Fecha', 'Tipo', 'Monto (MXN)', 'Concepto', 'Categoría', 'Archivo'],
       ...gastos.map(g => [
         g.fecha ? new Date(g.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+        g.tipo === 'ingreso' ? 'Ingreso' : 'Gasto',
         g.monto ?? 0,
         g.concepto ?? '',
         g.categoria ?? 'Otros',
@@ -118,11 +130,14 @@ router.get('/categorias', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const sessionId = req.headers['x-session-id'] || '';
-    const { categoria } = req.body || {};
-    if (typeof categoria !== 'string' || !categoria.trim()) return res.status(400).json({ ok: false, error: 'categoria requerida' });
+    const { categoria, tipo } = req.body || {};
+    const updates = {};
+    if (typeof categoria === 'string' && categoria.trim()) updates.categoria = categoria.trim();
+    if (tipo === 'ingreso' || tipo === 'gasto') updates.tipo = tipo;
+    if (Object.keys(updates).length === 0) return res.status(400).json({ ok: false, error: 'Enviar categoria y/o tipo' });
     const gasto = await Gasto.findOneAndUpdate(
       { _id: req.params.id, ...(sessionId ? { sessionId } : {}) },
-      { $set: { categoria: categoria.trim() } },
+      { $set: updates },
       { new: true }
     ).lean();
     if (!gasto) return res.status(404).json({ ok: false, error: 'No encontrado' });
