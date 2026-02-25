@@ -35,6 +35,13 @@ const exportStatus = document.getElementById('exportStatus');
 const progressContainer = document.getElementById('progressContainer');
 const progressLabel = document.getElementById('progressLabel');
 const progressBar = document.getElementById('progressBar');
+const selectionToolbar = document.getElementById('selectionToolbar');
+const checkAll = document.getElementById('checkAll');
+const selectedCount = document.getElementById('selectedCount');
+const btnEliminarSeleccion = document.getElementById('btnEliminarSeleccion');
+const btnExportLabel = document.getElementById('btnExportLabel');
+
+let selectedIds = new Set();
 
 function showProgress(label, percent = null) {
   progressLabel.textContent = label || 'Cargando…';
@@ -123,11 +130,29 @@ async function actualizarGasto(id, payload) {
   }
 }
 
+function updateSelectionUI(total) {
+  if (!selectionToolbar) return;
+  if (total === 0) {
+    selectionToolbar.classList.add('hidden');
+    return;
+  }
+  selectionToolbar.classList.remove('hidden');
+  const n = selectedIds.size;
+  if (checkAll) {
+    checkAll.checked = n === total && total > 0;
+    checkAll.indeterminate = n > 0 && n < total;
+  }
+  if (selectedCount) selectedCount.textContent = n ? `${n} seleccionado${n !== 1 ? 's' : ''}` : '';
+  if (btnEliminarSeleccion) btnEliminarSeleccion.disabled = n === 0;
+  if (btnExportLabel) btnExportLabel.textContent = n ? `Descargar Excel (${n})` : 'Descargar Excel';
+}
+
 function renderLista(items, categorias = []) {
   if (!items || items.length === 0) {
     empty.textContent = 'Aún no hay gastos registrados. Sube archivos para comenzar.';
     empty.classList.remove('hidden');
     lista.replaceChildren(empty);
+    if (selectionToolbar) selectionToolbar.classList.add('hidden');
     return;
   }
   empty.classList.add('hidden');
@@ -140,6 +165,7 @@ function renderLista(items, categorias = []) {
       card.style.borderColor = 'var(--border)';
       const archivo = g.archivo ? ` · ${escapeHtml(g.archivo)}` : '';
       const id = g._id || g.id;
+      const checked = selectedIds.has(String(id));
       const cat = g.categoria || 'Otros';
       const tipo = g.tipo === 'ingreso' ? 'ingreso' : 'gasto';
       const opts = [...baseCat];
@@ -149,7 +175,11 @@ function renderLista(items, categorias = []) {
       const tipoSelectId = `tipo-${String(id).replace(/[^a-zA-Z0-9-]/g, '_')}`;
       const optionsHtml = opts.map((c) => `<option value="${escapeHtml(c)}" ${c === cat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
       card.innerHTML = `
-        <div class="min-w-0 flex-1">
+        <div class="flex items-start gap-3 min-w-0 flex-1">
+          <label class="flex items-center shrink-0 cursor-pointer pt-0.5" title="Seleccionar">
+            <input type="checkbox" class="row-check rounded border-gray-400" data-id="${escapeHtml(String(id))}" ${checked ? 'checked' : ''} />
+          </label>
+          <div class="min-w-0 flex-1">
           <p class="font-medium truncate" style="color: var(--text);">${escapeHtml(g.concepto || 'Sin concepto')}</p>
           <p class="text-xs text-muted mt-0.5">${formatFecha(g.fecha)}${archivo}</p>
           <div class="mt-2 flex items-center gap-2 flex-wrap">
@@ -162,6 +192,7 @@ function renderLista(items, categorias = []) {
               <option value="__nueva__">—— Crear categoría ——</option>
             </select>
             <input type="text" id="${inputId}" placeholder="Nueva categoría" class="hidden text-xs rounded-lg border px-2 py-1.5 w-32" style="border-color: var(--border);" />
+          </div>
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
@@ -199,9 +230,28 @@ function renderLista(items, categorias = []) {
         inp.classList.add('hidden');
         inp.value = '';
       });
+      const rowCheck = card.querySelector('.row-check');
+      if (rowCheck) {
+        rowCheck.addEventListener('change', () => {
+          const sid = String(id);
+          if (rowCheck.checked) selectedIds.add(sid);
+          else selectedIds.delete(sid);
+          updateSelectionUI(items.length);
+        });
+      }
       return card;
     })
   );
+  updateSelectionUI(items.length);
+  if (checkAll) {
+    checkAll.onclick = () => {
+      const allIds = items.map((g) => String(g._id || g.id));
+      if (checkAll.checked) allIds.forEach((sid) => selectedIds.add(sid));
+      else allIds.forEach((sid) => selectedIds.delete(sid));
+      lista.querySelectorAll('.row-check').forEach((cb) => { cb.checked = checkAll.checked; });
+      updateSelectionUI(items.length);
+    };
+  }
 }
 
 async function listar() {
@@ -308,7 +358,28 @@ setupDropZone(dropZone, fileInput, { goToResults: false });
 setupDropZone(dropZone2, fileInput2, { goToResults: false, zone: dropZone2 });
 
 btnVerResultados.addEventListener('click', goToStep2);
-btnInicio.addEventListener('click', goToStep1);
+btnInicio.addEventListener('click', () => { selectedIds.clear(); goToStep1(); });
+
+if (btnEliminarSeleccion) {
+  btnEliminarSeleccion.addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      const res = await fetch(`${API}/bulk-delete`, fetchOpts({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      }));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error al eliminar');
+      selectedIds.clear();
+      setExportStatus(`${data.deleted ?? selectedIds.size} eliminado(s).`);
+      await listar();
+    } catch (err) {
+      setExportStatus(err.message || 'No se pudo eliminar.');
+    }
+    setTimeout(() => setExportStatus(''), 3000);
+  });
+}
 
 btnExport.addEventListener('click', async (e) => {
   e.preventDefault();
@@ -316,15 +387,17 @@ btnExport.addEventListener('click', async (e) => {
   setExportStatus('Generando…');
   showProgress('Generando Excel…', null);
   try {
-    const res = await fetch(API.replace('/documentos', '/documentos/export/excel'), fetchOpts());
+    let url = API.replace('/documentos', '/documentos/export/excel');
+    if (selectedIds.size > 0) url += '?ids=' + encodeURIComponent([...selectedIds].join(','));
+    const res = await fetch(url, fetchOpts());
     if (!res.ok) throw new Error('Error al exportar');
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+    const link = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = link;
     a.download = `gastos-${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(link);
     setExportStatus('Descargado.');
   } catch (err) {
     setExportStatus(err.message || 'No se pudo descargar.');

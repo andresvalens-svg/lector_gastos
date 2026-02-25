@@ -83,7 +83,13 @@ router.get('/export/excel', async (req, res) => {
   try {
     const sessionId = requireSession(req, res);
     if (!sessionId) return;
-    const gastos = await Gasto.find({ sessionId }).sort({ creadoEn: -1 }).lean();
+    const idsParam = req.query.ids;
+    const filter = { sessionId };
+    if (idsParam && typeof idsParam === 'string') {
+      const ids = idsParam.split(',').map((id) => id.trim()).filter(Boolean);
+      if (ids.length) filter._id = { $in: ids };
+    }
+    const gastos = await Gasto.find(filter).sort({ creadoEn: -1 }).lean();
     const rows = [
       ['Fecha', 'Tipo', 'Monto (MXN)', 'Concepto', 'Categoría', 'Archivo'],
       ...gastos.map(g => [
@@ -113,6 +119,20 @@ router.get('/', async (req, res) => {
     const gastos = await Gasto.find(sessionId ? { sessionId } : {}).sort({ creadoEn: -1 }).lean();
     res.json({ ok: true, items: gastos });
   } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/bulk-delete', async (req, res) => {
+  try {
+    const sessionId = requireSession(req, res);
+    if (!sessionId) return;
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ ok: false, error: 'ids (array) requerido' });
+    const result = await Gasto.deleteMany({ _id: { $in: ids }, sessionId });
+    res.json({ ok: true, deleted: result.deletedCount });
+  } catch (err) {
+    if (err.name === 'CastError') return res.status(400).json({ ok: false, error: 'ID inválido' });
     res.status(500).json({ ok: false, error: err.message });
   }
 });

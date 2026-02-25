@@ -79,13 +79,19 @@
         <p class="text-muted text-sm">Arrastra o clic para agregar más archivos</p>
         <input type="file" id="fileInput2" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" multiple class="hidden" />
       </div>
-      <div class="flex justify-end mb-5">
-        <a id="btnExport" href="#" class="btn-primary inline-flex items-center gap-2 py-3 px-6 rounded-xl text-sm font-medium transition-colors shadow-sm">
+      <div id="selectionToolbar" class="flex flex-wrap items-center gap-3 mb-5 hidden">
+        <label class="flex items-center gap-2 text-sm text-muted cursor-pointer">
+          <input type="checkbox" id="checkAll" class="rounded border-gray-400" />
+          <span>Seleccionar todo</span>
+        </label>
+        <span id="selectedCount" class="text-xs text-muted"></span>
+        <button type="button" id="btnEliminarSeleccion" class="text-sm py-2 px-4 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:pointer-events-none" disabled>Eliminar seleccionados</button>
+        <a id="btnExport" href="#" class="btn-primary inline-flex items-center gap-2 py-2 px-5 rounded-xl text-sm font-medium transition-colors shadow-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          Descargar Excel
+          <span id="btnExportLabel">Descargar Excel</span>
         </a>
       </div>
-      <p class="text-xs text-muted mb-3">Elimina los que no quieras incluir antes de descargar.</p>
+      <p class="text-xs text-muted mb-3">Marca los conceptos que quieras incluir o eliminar; descarga solo los seleccionados o todos.</p>
       <div id="lista" class="space-y-2 max-h-96 overflow-y-auto rounded-2xl border p-4 shadow-sm" style="background: var(--bg-card); border-color: var(--border);">
         <p id="empty" class="text-muted text-sm py-8 text-center">Cargando…</p>
       </div>
