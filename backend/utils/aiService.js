@@ -17,20 +17,44 @@ export async function extraerConceptosDeDocumento(texto) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || !texto?.trim()) return null;
 
-  const prompt = `Texto de un documento (presupuesto, cotización, recibo, evento, boda, o estado de cuenta bancario). Suele ser una tabla con columnas como Concepto, Costo, Importe (o Cargos/Abonos, Retiros/Depósitos).
+  const prompt = `El texto siguiente puede ser CUALQUIERA de estos tipos de documento. Debes detectar el tipo y extraer ítems (concepto, monto, fecha, categoria, tipo) aplicando las reglas que correspondan.
 
-REGLAS:
-1. Incluye como ítem SOLO las filas que son conceptos/movimientos (cada línea con descripción y/o monto). Una fila = un ítem.
-2. NO incluyas: la fila de TOTAL / Total a pagar / Gran total / Saldo; ni bloques solo informativos sin monto (ej. "Incluye"...). Esos no son ítems.
-3. MONTO: número siempre positivo (valor absoluto). Si hay signo negativo en el documento, no lo incluyas en el número; usa "tipo" para eso (ver abajo). Si está en blanco, CORTESIA, CLIENTE, etc. → monto = 0.
-4. TIPO (gasto o ingreso): 
-   - En estados de cuenta: si la columna es Cargos/Retiros/Débitos o el monto aparece negativo → "gasto". Si es Abonos/Depósitos/Créditos o monto positivo en columna de ingresos → "ingreso". Usa los nombres de columnas y el signo para decidir.
-   - En presupuestos/recibos/cotizaciones (todo es lo que se paga) → "gasto" para todos.
-5. Para cada ítem devuelve: "concepto", "monto" (número >= 0), "fecha" (YYYY-MM-DD), "categoria" (una de: ${CATEGORIAS.join(', ')}) y "tipo" ("gasto" o "ingreso").
+=== TIPOS DE DOCUMENTO ===
 
-Responde solo un JSON array, sin markdown. Ejemplo: [{"concepto":"Paquete Plata...","monto":49500,"fecha":"2027-01-01","categoria":"Restaurantes","tipo":"gasto"},{"concepto":"Depósito nómina","monto":15000,"fecha":"2027-01-15","categoria":"Bancos","tipo":"ingreso"}]
+A) PRESUPUESTO / COTIZACIÓN / EVENTO / BODA (tabla con servicios)
+   - Suele tener columnas: descripción del servicio, a veces "Costo" (por persona/unidad) y una columna de TOTAL por línea.
+   - Nombres que puede tener la columna de DESCRIPCIÓN: Concepto, Descripción, Servicio, Item, Detalle.
+   - Nombres que puede tener la columna de TOTAL DE LA LÍNEA (esta SÍ es "monto"): Importe, Total, Monto, Amount, Total línea, Subtotal, Precio total, Suma.
+   - Nombres que NO debes usar como monto (son unitarios o cantidad): Costo, Costo por persona, P. unit., Precio unitario, Por persona, # Invitados, Cantidad, Qty.
+   - Regla: "monto" = siempre la columna que sea el total a pagar por esa fila. Si hay dos números (ej. 3 y 49500), el monto es el grande (49500), no el unitario (3).
+   - CONCEPTO: solo la descripción del servicio (ej. "Paquete Plata 3 tiempos...", "DJ Básico"). NUNCA "Concepto 3", "Concepto 5", "FECHA: ENERO", "HORA: PM A AM" ni listas "Incluye...".
 
-TEXTO:
+B) TICKET (super, gasolinera, restaurante, tienda)
+   - Pocas líneas; a veces sin columnas claras. Cada línea suele ser: descripción del producto/servicio + precio, o un solo total al final.
+   - CONCEPTO: lo que describe el ítem (ej. "Café americano", "Gasolina 95", "Total"). Si solo hay un total, concepto puede ser "Compra" o el nombre del establecimiento si aparece.
+   - MONTO: el precio o total de esa línea. Un solo número por ítem.
+
+C) ESTADO DE CUENTA BANCARIO
+   - Puede tener columnas: Fecha, Concepto/Descripción/Movimiento/Referencia, Cargos/Débitos/Retiros, Abonos/Créditos/Depósitos, Saldo. Con o sin líneas separadoras entre secciones.
+   - Cada fila de movimiento = un ítem. CONCEPTO = la descripción del movimiento (ej. "Transferencia recibida", "Pago con tarjeta").
+   - MONTO: el valor en la columna que tenga el número (Cargos o Abonos). Usa valor absoluto (siempre positivo).
+   - TIPO: si el monto está en Cargos/Débitos/Retiros → "gasto". Si está en Abonos/Créditos/Depósitos → "ingreso".
+   - No crees ítems para: encabezados, líneas de "Saldo anterior", "Saldo", subtotales, ni filas que sean solo separadores o guiones.
+
+D) RECIBO A MANO / NOTA / COMPROBANTE LIBRE
+   - Texto libre, sin tabla: "Recibí $500 por concepto de...", "Pagado: renta marzo - $12000", listas con ítem y monto.
+   - Extrae cada pago o ítem que tenga descripción y monto. CONCEPTO = lo que se pagó o recibió. MONTO = el valor. TIPO = "gasto" si es un pago, "ingreso" si es un cobro.
+
+=== REGLAS UNIVERSALES ===
+1. CONCEPTO: siempre una descripción legible del ítem/movimiento. NUNCA uses como concepto: números de fila ("Concepto 3"), encabezados ("FECHA:", "HORA:", "Incluye"), la palabra "TOTAL" como único texto, ni nombres de columnas.
+2. MONTO: siempre el valor que representa el total a pagar o el movimiento (total de la línea/fila). Si hay varias columnas numéricas, elige la que sea el TOTAL/Importe final, no la unitaria ni la cantidad. Número positivo. Si está vacío o dice CORTESÍA/CLIENTE → 0.
+3. No crees ítems para: fila de TOTAL general, subtotales, encabezados, líneas en blanco, "Incluye" sin monto, separadores.
+4. FECHA: infiere del documento (ej. "Enero 2027" → 2027-01-01); si no hay, usa la fecha actual. Categoría: una de [${CATEGORIAS.join(', ')}].
+5. TIPO: en presupuestos/tickets/recibos de pago → "gasto". En estados de cuenta → según columna (Cargos=gasto, Abonos=ingreso). En recibos de cobro → "ingreso".
+
+Responde ÚNICAMENTE un JSON array, sin markdown. Un objeto por ítem/movimiento real. Ejemplo: [{"concepto":"Paquete Plata 3 tiempos...","monto":49500,"fecha":"2027-01-01","categoria":"Restaurantes","tipo":"gasto"},{"concepto":"Transferencia recibida","monto":15000,"fecha":"2027-01-15","categoria":"Bancos","tipo":"ingreso"}]
+
+TEXTO DEL DOCUMENTO:
 ---
 ${texto.slice(0, 30000)}
 ---`;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import XLSX from 'xlsx';
+import mongoose from 'mongoose';
 import { Gasto } from '../models/Gasto.js';
 import { extraerDatos, extraerTexto, resolveMime, isSupportedFile } from '../utils/extractors.js';
 import { identificarCategoria } from '../utils/categorizer.js';
@@ -129,7 +130,13 @@ router.post('/bulk-delete', async (req, res) => {
     if (!sessionId) return;
     const { ids } = req.body || {};
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ ok: false, error: 'ids (array) requerido' });
-    const result = await Gasto.deleteMany({ _id: { $in: ids }, sessionId });
+    const objectIds = ids
+      .filter((id) => id != null && String(id).trim())
+      .map((id) => String(id).trim())
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    if (objectIds.length === 0) return res.status(400).json({ ok: false, error: 'Ningún ID válido' });
+    const result = await Gasto.deleteMany({ _id: { $in: objectIds }, sessionId });
     res.json({ ok: true, deleted: result.deletedCount });
   } catch (err) {
     if (err.name === 'CastError') return res.status(400).json({ ok: false, error: 'ID inválido' });
