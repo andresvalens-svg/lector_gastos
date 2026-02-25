@@ -61,6 +61,8 @@ export async function extraerDatos(buffer, mimetype, filename = '') {
   if (mime === MIME_CSV || (mime === MIME_PLAIN && /\.csv$/i.test(filename))) return extraerDatosCsv(buffer);
   if (mime === MIME_EXCEL_XLSX || mime === MIME_EXCEL_XLS) return extraerDatosExcel(buffer);
   const texto = await extraerTexto(buffer, mime);
+  const multiples = parsearMultiplesConceptos(texto);
+  if (multiples.length > 0) return multiples;
   const { fecha, monto, concepto } = parsearDatos(texto);
   return [{ fecha, monto, concepto }];
 }
@@ -277,6 +279,27 @@ function extraerConcepto(texto) {
   const candidatos = lineas.filter(l => !/^\d+[\-\/\.]?\d*[\-\/\.]?\d*$/.test(l) && !/^\$?\s*[\d,\.]+\s*$/.test(l));
   const primera = candidatos[0] || lineas[0] || '';
   return primera.slice(0, 200);
+}
+
+/** Extrae varios conceptos de un texto libre (PDF, imagen, HTML): cada línea con monto → un gasto. */
+function parsearMultiplesConceptos(texto) {
+  if (!texto || !String(texto).trim()) return [];
+  const fechaGlobal = buscarEnTexto(texto, parsearFecha, 150) || new Date();
+  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const resultados = [];
+  for (const linea of lineas) {
+    if (linea.length > 500) continue;
+    const monto = parsearMonto(linea);
+    if (monto == null || monto <= 0) continue;
+    let concepto = linea
+      .replace(/\$?\s*[\d.,]+\s*\$?/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!concepto || concepto.length < 2) concepto = `Concepto ${resultados.length + 1}`;
+    concepto = concepto.slice(0, 200);
+    resultados.push({ fecha: fechaGlobal, monto, concepto });
+  }
+  return resultados;
 }
 
 export function parsearDatos(texto) {

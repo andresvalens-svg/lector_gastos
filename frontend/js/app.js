@@ -1,7 +1,20 @@
 const API = 'https://lector-gastos.onrender.com/api/documentos';
 
+const SESSION_KEY = 'lector-gastos-session';
+
+function getSessionId() {
+  let id = sessionStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id = crypto.randomUUID && crypto.randomUUID() || [1e7, 1e3, 4e3, 8e3, 1e11].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+    sessionStorage.setItem(SESSION_KEY, id);
+  }
+  return id;
+}
+
 function fetchOpts(extra = {}) {
-  return { ...extra };
+  const headers = { ...(extra.headers || {}) };
+  headers['X-Session-Id'] = getSessionId();
+  return { ...extra, headers };
 }
 
 const step1 = document.getElementById('step1');
@@ -19,6 +32,30 @@ const lista = document.getElementById('lista');
 const empty = document.getElementById('empty');
 const btnExport = document.getElementById('btnExport');
 const exportStatus = document.getElementById('exportStatus');
+const progressContainer = document.getElementById('progressContainer');
+const progressLabel = document.getElementById('progressLabel');
+const progressBar = document.getElementById('progressBar');
+
+function showProgress(label = 'Cargando…', percent = null) {
+  progressLabel.textContent = label;
+  if (percent != null) {
+    progressBar.classList.remove('indeterminate');
+    progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  } else {
+    progressBar.classList.add('indeterminate');
+    progressBar.style.width = '30%';
+  }
+  progressContainer.hidden = false;
+}
+function hideProgress() {
+  progressContainer.hidden = true;
+  progressBar.classList.remove('indeterminate');
+  progressBar.style.width = '0%';
+}
+function setProgressPercent(percent) {
+  progressBar.classList.remove('indeterminate');
+  progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+}
 
 function showMsg(text, isError = false) {
   mensaje.textContent = text;
@@ -113,6 +150,7 @@ function renderLista(items) {
 }
 
 async function listar() {
+  showProgress('Cargando gastos…', null);
   try {
     const res = await fetch(API, fetchOpts());
     const ct = res.headers.get('content-type') || '';
@@ -121,6 +159,8 @@ async function listar() {
     renderLista(data.items || []);
   } catch (_) {
     renderLista([]);
+  } finally {
+    hideProgress();
   }
 }
 
@@ -142,11 +182,14 @@ async function procesarArchivos(files, options = {}) {
   const isStep2 = zone === dropZone2;
   if (!isStep2) hideMsg();
   zone.classList.add('opacity-75', 'pointer-events-none');
+  showProgress(`Procesando 0/${arr.length} archivos…`, 0);
   const exitosos = [];
   const errores = [];
   for (let i = 0; i < arr.length; i++) {
     const file = arr[i];
+    const pct = ((i + 1) / arr.length) * 100;
     const msg = `Procesando ${i + 1}/${arr.length}: «${escapeHtml(file.name)}»…`;
+    showProgress(msg, pct);
     if (isStep2) setExportStatus(msg); else showMsg(msg, false);
     try {
       await procesarUnArchivo(file);
@@ -156,6 +199,7 @@ async function procesarArchivos(files, options = {}) {
     }
   }
   zone.classList.remove('opacity-75', 'pointer-events-none');
+  hideProgress();
   const info = exitosos.length > 0
     ? `Archivos procesados: ${exitosos.join(', ')}${errores.length > 0 ? ` · Errores: ${errores.join('; ')}` : ''}`
     : (errores.length > 0 ? `No se procesó ningún archivo. ${errores.join('; ')}` : '');
@@ -212,6 +256,7 @@ btnExport.addEventListener('click', async (e) => {
   e.preventDefault();
   btnExport.disabled = true;
   setExportStatus('Generando…');
+  showProgress('Generando Excel…', null);
   try {
     const res = await fetch(API.replace('/documentos', '/documentos/export/excel'), fetchOpts());
     if (!res.ok) throw new Error('Error al exportar');
@@ -226,6 +271,7 @@ btnExport.addEventListener('click', async (e) => {
   } catch (err) {
     setExportStatus(err.message || 'No se pudo descargar.');
   } finally {
+    hideProgress();
     setTimeout(() => { setExportStatus(''); btnExport.disabled = false; }, 2000);
   }
 });

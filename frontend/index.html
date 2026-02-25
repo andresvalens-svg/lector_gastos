@@ -27,9 +27,23 @@
     .step.next { transform: translateX(24px); }
     .drop-zone-active { border-color: var(--nodo-accent); background: rgba(69, 74, 82, 0.04); }
     .card-hover:hover { background: #fafaf9; }
+    #progressContainer { transition: opacity 0.2s ease; }
+    #progressContainer[hidden] { display: none !important; }
+    #progressBar { transition: width 0.25s ease; }
+    #progressBar.indeterminate { width: 30% !important; animation: progressIndeterminate 1.2s ease-in-out infinite; }
+    @keyframes progressIndeterminate { 0% { margin-left: 0; } 50% { margin-left: 70%; } 100% { margin-left: 0; } }
   </style>
 </head>
 <body class="font-sans min-h-screen antialiased">
+  <!-- Barra de progreso global -->
+  <div id="progressContainer" class="fixed top-0 left-0 right-0 z-50 bg-[var(--nodo-card)] border-b border-[var(--nodo-border)] shadow-sm" hidden>
+    <div class="max-w-2xl mx-auto px-4 py-3">
+      <p id="progressLabel" class="text-sm text-[var(--nodo-text-muted)] mb-1.5">Cargando…</p>
+      <div class="h-2 bg-[var(--nodo-border)] rounded-full overflow-hidden">
+        <div id="progressBar" class="h-full bg-[var(--nodo-accent)] rounded-full" style="width: 0%"></div>
+      </div>
+    </div>
+  </div>
   <div class="min-h-screen flex flex-col items-center px-4 py-16 relative">
     <!-- Paso 1: Subir archivos -->
     <section id="step1" class="step visible w-full max-w-2xl">

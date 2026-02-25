@@ -29,6 +29,10 @@ router.post('/', (req, res, next) => {
   });
 }, async (req, res) => {
   try {
+    const sessionId = req.headers['x-session-id'] || '';
+    if (!sessionId) {
+      return res.status(400).json({ ok: false, error: 'Falta identificador de sesión (header X-Session-Id)' });
+    }
     if (!req.file) {
       return res.status(400).json({ ok: false, error: 'Falta el archivo (campo: documento)' });
     }
@@ -40,6 +44,7 @@ router.post('/', (req, res, next) => {
     for (const { fecha, monto, concepto } of datos) {
       const categoria = identificarCategoria(concepto, '');
       const gasto = new Gasto({
+        sessionId,
         fecha,
         monto,
         concepto,
@@ -59,10 +64,14 @@ router.post('/', (req, res, next) => {
   }
 });
 
-// GET /api/documentos/export/excel — exportar gastos a Excel
-router.get('/export/excel', async (_req, res) => {
+// GET /api/documentos/export/excel — exportar gastos a Excel (solo de la sesión)
+router.get('/export/excel', async (req, res) => {
   try {
-    const gastos = await Gasto.find().sort({ creadoEn: -1 }).lean();
+    const sessionId = req.headers['x-session-id'] || '';
+    if (!sessionId) {
+      return res.status(400).json({ ok: false, error: 'Falta identificador de sesión (header X-Session-Id)' });
+    }
+    const gastos = await Gasto.find({ sessionId }).sort({ creadoEn: -1 }).lean();
     const rows = [
       ['Fecha', 'Monto (MXN)', 'Concepto', 'Categoría', 'Archivo'],
       ...gastos.map(g => [
@@ -85,20 +94,22 @@ router.get('/export/excel', async (_req, res) => {
   }
 });
 
-// GET /api/documentos — listar todos
-router.get('/', async (_req, res) => {
+// GET /api/documentos — listar solo los de la sesión actual
+router.get('/', async (req, res) => {
   try {
-    const gastos = await Gasto.find().sort({ creadoEn: -1 }).lean();
+    const sessionId = req.headers['x-session-id'] || '';
+    const gastos = await Gasto.find(sessionId ? { sessionId } : {}).sort({ creadoEn: -1 }).lean();
     res.json({ ok: true, items: gastos });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// GET /api/documentos/:id — uno por id
+// GET /api/documentos/:id — uno por id (solo si pertenece a la sesión)
 router.get('/:id', async (req, res) => {
   try {
-    const gasto = await Gasto.findById(req.params.id).lean();
+    const sessionId = req.headers['x-session-id'] || '';
+    const gasto = await Gasto.findOne({ _id: req.params.id, ...(sessionId ? { sessionId } : {}) }).lean();
     if (!gasto) return res.status(404).json({ ok: false, error: 'No encontrado' });
     res.json({ ok: true, item: gasto });
   } catch (err) {
@@ -107,10 +118,11 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/documentos/:id — eliminar gasto
+// DELETE /api/documentos/:id — eliminar gasto (solo si pertenece a la sesión)
 router.delete('/:id', async (req, res) => {
   try {
-    const gasto = await Gasto.findByIdAndDelete(req.params.id);
+    const sessionId = req.headers['x-session-id'] || '';
+    const gasto = await Gasto.findOneAndDelete({ _id: req.params.id, ...(sessionId ? { sessionId } : {}) });
     if (!gasto) return res.status(404).json({ ok: false, error: 'No encontrado' });
     res.json({ ok: true });
   } catch (err) {
