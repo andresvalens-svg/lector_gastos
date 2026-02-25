@@ -64,7 +64,7 @@ export async function extraerDatos(buffer, mimetype, filename = '') {
   const multiples = parsearMultiplesConceptos(texto);
   if (multiples.length > 0) return multiples;
   const { fecha, monto, concepto } = parsearDatos(texto);
-  return [{ fecha, monto, concepto }];
+  return [{ fecha, monto, concepto, textoOriginal: texto }];
 }
 
 function parseCsvLine(line) {
@@ -103,12 +103,13 @@ function extraerDatosCsv(buffer) {
     const fecha = parsearFecha(fechaVal) || new Date();
     const monto = parsearMonto(montoVal) ?? 0;
     const concepto = (conceptoVal || '').trim() || 'Sin concepto';
-    if (monto > 0 || concepto !== 'Sin concepto') datos.push({ fecha, monto, concepto });
+    const textoOriginal = row.join(' ').trim() || `${concepto} ${montoVal ?? ''}`.trim();
+    if (monto > 0 || concepto !== 'Sin concepto') datos.push({ fecha, monto, concepto, textoOriginal });
   }
   if (datos.length === 0 && rows.length >= 1) {
     const joined = rows.map(r => r.join(' ')).join('\n');
     const { fecha, monto, concepto } = parsearDatos(joined);
-    datos.push({ fecha, monto, concepto });
+    datos.push({ fecha, monto, concepto, textoOriginal: joined });
   }
   return datos;
 }
@@ -143,12 +144,13 @@ function extraerDatosExcel(buffer) {
     if (!fecha) fecha = new Date();
     const monto = parsearMonto(String(montoVal || '')) ?? (typeof montoVal === 'number' && montoVal > 0 ? montoVal : 0);
     const concepto = (String(conceptoVal || '').trim()) || 'Sin concepto';
-    if (monto > 0 || concepto !== 'Sin concepto') datos.push({ fecha, monto, concepto });
+    const textoOriginal = (Array.isArray(row) ? row.map(String).join(' ') : String(row)).trim() || `${concepto} ${montoVal ?? ''}`.trim();
+    if (monto > 0 || concepto !== 'Sin concepto') datos.push({ fecha, monto, concepto, textoOriginal });
   }
   if (datos.length === 0 && rows.length >= 1) {
     const joined = rows.map(r => (Array.isArray(r) ? r.join(' ') : String(r))).join('\n');
     const { fecha, monto, concepto } = parsearDatos(joined);
-    datos.push({ fecha, monto, concepto });
+    datos.push({ fecha, monto, concepto, textoOriginal: joined });
   }
   return datos;
 }
@@ -297,7 +299,7 @@ function parsearMultiplesConceptos(texto) {
       .trim();
     if (!concepto || concepto.length < 2) concepto = `Concepto ${resultados.length + 1}`;
     concepto = concepto.slice(0, 200);
-    resultados.push({ fecha: fechaGlobal, monto, concepto });
+    resultados.push({ fecha: fechaGlobal, monto, concepto, textoOriginal: linea });
   }
   return resultados;
 }

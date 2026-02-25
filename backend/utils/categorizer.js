@@ -1,4 +1,3 @@
-// Categorías comunes en México (feb 2026)
 const REGLAS = [
   { categoria: 'Supermercado', palabras: ['supermercado', 'soriana', 'chedraui', 'heb', 'walmart', 'oxxo', 'seven', '7-eleven', 'minisuper', 'abarrotes'] },
   { categoria: 'Restaurantes', palabras: ['restaurante', 'cafe', 'cafetería', 'comida', 'pizza', 'hamburguesa', 'taquería', 'taqueria', 'uber eats', 'rappi', 'didí food'] },

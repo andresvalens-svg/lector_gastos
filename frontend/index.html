@@ -5,87 +5,91 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lector de Gastos | Ordena tu operación</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23454a52'/><path d='M8 10h16v2H8zm0 4h12v2H8zm0 4h10v2H8z' fill='%23fff'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23e85d4c'/><path d='M8 10h16v2H8zm0 4h12v2H8zm0 4h10v2H8z' fill='%23fff'/></svg>">
   <link href="css/output.css" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --nodo-bg: #f7f6f4;
-      --nodo-card: #ffffff;
-      --nodo-border: #e8e6e3;
-      --nodo-text: #2d2a26;
-      --nodo-text-muted: #6b6560;
-      --nodo-accent: #454a52;
-      --nodo-soft: #9a938c;
+      --accent: #e85d4c;
+      --accent-hover: #d94a3a;
+      --accent-soft: rgba(232, 93, 76, 0.12);
+      --bg: #fef8f7;
+      --bg-card: #ffffff;
+      --border: #f0e5e3;
+      --text: #2d2625;
+      --text-muted: #7a6f6e;
+      --focus-ring: var(--accent);
     }
-    body { background: var(--nodo-bg); color: var(--nodo-text); }
+    body { background: var(--bg); color: var(--text); }
     .step { transition: opacity 0.4s ease, transform 0.4s ease; }
     .step.hidden { opacity: 0; pointer-events: none; position: absolute; transform: translateX(-24px); top: 0; left: 0; right: 0; }
     .step.visible { opacity: 1; transform: translateX(0); }
     .step.next { transform: translateX(24px); }
-    .drop-zone-active { border-color: var(--nodo-accent); background: rgba(69, 74, 82, 0.04); }
-    .card-hover:hover { background: #fafaf9; }
-    #progressContainer { transition: opacity 0.2s ease; }
+    .drop-zone-main { border-color: var(--border); background: var(--bg-card); }
+    .drop-zone-main:hover, .drop-zone-active { border-color: var(--accent); background: var(--accent-soft); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .card-hover:hover { background: var(--accent-soft); }
+    .text-muted { color: var(--text-muted); }
+    .text-accent, .hover\:text-accent:hover { color: var(--accent); }
+    #progressContainer { transition: opacity 0.2s ease; background: var(--bg-card); border-color: var(--border); }
     #progressContainer[hidden] { display: none !important; }
-    #progressBar { transition: width 0.25s ease; }
+    #progressBar { background: var(--accent); transition: width 0.25s ease; }
     #progressBar.indeterminate { width: 30% !important; animation: progressIndeterminate 1.2s ease-in-out infinite; }
     @keyframes progressIndeterminate { 0% { margin-left: 0; } 50% { margin-left: 70%; } 100% { margin-left: 0; } }
   </style>
 </head>
 <body class="font-sans min-h-screen antialiased">
-  <!-- Barra de progreso global -->
-  <div id="progressContainer" class="fixed top-0 left-0 right-0 z-50 bg-[var(--nodo-card)] border-b border-[var(--nodo-border)] shadow-sm" hidden>
+  <div id="progressContainer" class="fixed top-0 left-0 right-0 z-50 border-b shadow-sm" hidden>
     <div class="max-w-2xl mx-auto px-4 py-3">
-      <p id="progressLabel" class="text-sm text-[var(--nodo-text-muted)] mb-1.5">Cargando…</p>
-      <div class="h-2 bg-[var(--nodo-border)] rounded-full overflow-hidden">
-        <div id="progressBar" class="h-full bg-[var(--nodo-accent)] rounded-full" style="width: 0%"></div>
+      <p id="progressLabel" class="text-sm text-muted mb-1.5">Cargando…</p>
+      <div class="h-2 rounded-full overflow-hidden" style="background: var(--border);">
+        <div id="progressBar" class="h-full rounded-full" style="width: 0%"></div>
       </div>
     </div>
   </div>
   <div class="min-h-screen flex flex-col items-center px-4 py-16 relative">
-    <!-- Paso 1: Subir archivos -->
     <section id="step1" class="step visible w-full max-w-2xl">
       <div class="text-center mb-10">
-        <h1 class="text-3xl font-bold text-[var(--nodo-text)] mb-3">Lector de Gastos</h1>
-        <p class="text-[var(--nodo-text-muted)] text-base max-w-md mx-auto">Ordena tu operación. Sube varios archivos a la vez y extraemos fecha, monto y concepto automáticamente.</p>
+        <h1 class="text-3xl font-bold mb-2">Lector de <span class="text-accent">Gastos</span></h1>
+        <p class="text-muted text-base max-w-md mx-auto">Ordena tu operación. Sube archivos y extraemos fecha, monto y concepto.</p>
       </div>
-      <div id="dropZone" class="border-2 border-dashed border-[var(--nodo-border)] rounded-2xl p-14 text-center cursor-pointer transition-all duration-200 bg-[var(--nodo-card)] shadow-sm hover:border-[var(--nodo-soft)] hover:bg-[#fdfcfa]">
-        <p class="text-[var(--nodo-text)] font-medium mb-1">Arrastra varios archivos aquí o haz clic para seleccionar</p>
-        <p class="text-[var(--nodo-text-muted)] text-sm mt-2">CSV, Excel, HTML, PDF, JPG, PNG · Puedes agregar más antes de ver resultados</p>
+      <div id="dropZone" class="drop-zone-main border-2 border-dashed rounded-2xl p-14 text-center cursor-pointer transition-all duration-200 shadow-sm">
+        <p class="font-medium mb-1" style="color: var(--text);">Arrastra archivos aquí o haz clic</p>
+        <p class="text-muted text-sm mt-2">CSV, Excel, HTML, PDF, JPG, PNG</p>
         <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" multiple class="hidden" />
       </div>
       <div id="step1Actions" class="mt-5 hidden">
-        <button id="btnVerResultados" type="button" class="w-full py-3 px-6 rounded-xl bg-[var(--nodo-accent)] text-white font-medium hover:opacity-90 transition-opacity">Ver resultados y descargar Excel →</button>
+        <button id="btnVerResultados" type="button" class="btn-primary w-full py-3 px-6 rounded-xl font-medium transition-colors shadow-sm">Ver resultados y descargar Excel →</button>
       </div>
       <p id="mensaje" class="mt-5 text-sm text-center hidden"></p>
     </section>
 
-    <!-- Paso 2: Listado + descarga -->
     <section id="step2" class="step hidden w-full max-w-3xl">
       <div class="mb-6">
         <div class="flex items-center justify-between gap-4 flex-wrap">
-          <h2 class="text-2xl font-bold text-[var(--nodo-text)]">Gastos registrados</h2>
-          <button id="btnInicio" type="button" class="text-sm text-[var(--nodo-text-muted)] hover:text-[var(--nodo-accent)]">← Volver a inicio</button>
+          <h2 class="text-2xl font-bold" style="color: var(--text);">Gastos registrados</h2>
+          <button id="btnInicio" type="button" class="text-sm text-muted hover:text-accent transition-colors">← Volver a inicio</button>
         </div>
-        <p id="archivoInfo" class="text-[var(--nodo-text-muted)] text-sm mt-2"></p>
+        <p id="archivoInfo" class="text-muted text-sm mt-2"></p>
       </div>
-      <div id="dropZone2" class="border-2 border-dashed border-[var(--nodo-border)] rounded-xl p-4 mb-5 text-center cursor-pointer transition-all bg-[var(--nodo-card)] hover:border-[var(--nodo-soft)] hover:bg-[#fdfcfa]">
-        <p class="text-[var(--nodo-text-muted)] text-sm">Arrastra o haz clic para agregar más archivos</p>
+      <div id="dropZone2" class="drop-zone-main border-2 border-dashed rounded-xl p-4 mb-5 text-center cursor-pointer transition-all">
+        <p class="text-muted text-sm">Arrastra o clic para agregar más archivos</p>
         <input type="file" id="fileInput2" accept=".csv,.xlsx,.xls,.html,.htm,.pdf,.jpg,.jpeg,.png" multiple class="hidden" />
       </div>
       <div class="flex justify-end mb-5">
-        <a id="btnExport" href="#" class="inline-flex items-center gap-2 py-3 px-6 rounded-xl bg-[var(--nodo-accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-sm">
+        <a id="btnExport" href="#" class="btn-primary inline-flex items-center gap-2 py-3 px-6 rounded-xl text-sm font-medium transition-colors shadow-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           Descargar Excel
         </a>
       </div>
-      <p class="text-xs text-[var(--nodo-text-muted)] mb-3">Elimina los conceptos que no quieras incluir en el Excel antes de descargar.</p>
-      <div id="lista" class="space-y-2 max-h-96 overflow-y-auto bg-[var(--nodo-card)] rounded-2xl border border-[var(--nodo-border)] p-4 shadow-sm">
-        <p id="empty" class="text-[var(--nodo-text-muted)] text-sm py-8 text-center">Cargando…</p>
+      <p class="text-xs text-muted mb-3">Elimina los que no quieras incluir antes de descargar.</p>
+      <div id="lista" class="space-y-2 max-h-96 overflow-y-auto rounded-2xl border p-4 shadow-sm" style="background: var(--bg-card); border-color: var(--border);">
+        <p id="empty" class="text-muted text-sm py-8 text-center">Cargando…</p>
       </div>
-      <p id="exportStatus" class="mt-4 text-xs text-[var(--nodo-text-muted)]"></p>
+      <p id="exportStatus" class="mt-4 text-xs text-muted"></p>
     </section>
   </div>
 

@@ -4,50 +4,48 @@ import XLSX from 'xlsx';
 import { Gasto } from '../models/Gasto.js';
 import { extraerDatos, isSupportedFile } from '../utils/extractors.js';
 import { identificarCategoria } from '../utils/categorizer.js';
+import { interpretarGastosConIA } from '../utils/aiService.js';
 
 const router = Router();
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE },
-  fileFilter: (_req, file, cb) => {
-    if (!isSupportedFile(file.originalname)) {
-      return cb(new Error('Solo se permiten CSV, Excel, HTML, PDF, JPG, JPEG, PNG'), false);
-    }
-    cb(null, true);
-  },
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => (isSupportedFile(file.originalname) ? cb(null, true) : cb(new Error('Solo CSV, Excel, HTML, PDF, JPG, PNG'), false)),
 });
 
-// POST /api/documentos — subir y procesar
+function requireSession(req, res) {
+  const sessionId = req.headers['x-session-id'] || '';
+  if (!sessionId) res.status(400).json({ ok: false, error: 'Falta X-Session-Id' });
+  return sessionId || null;
+}
+
 router.post('/', (req, res, next) => {
   upload.single('documento')(req, res, (err) => {
-    if (err) {
-      const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
-      return res.status(status).json({ ok: false, error: err.message || 'Archivo no válido' });
-    }
+    if (err) return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ ok: false, error: err.message });
     next();
   });
 }, async (req, res) => {
   try {
-    const sessionId = req.headers['x-session-id'] || '';
-    if (!sessionId) {
-      return res.status(400).json({ ok: false, error: 'Falta identificador de sesión (header X-Session-Id)' });
-    }
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'Falta el archivo (campo: documento)' });
-    }
+    const sessionId = requireSession(req, res);
+    if (!sessionId) return;
+    if (!req.file) return res.status(400).json({ ok: false, error: 'Falta archivo (documento)' });
     const buffer = req.file.buffer;
     const mimetype = req.file.mimetype;
     const filename = req.file.originalname;
     const datos = await extraerDatos(buffer, mimetype, filename);
+    const textos = datos.map((d) => d.textoOriginal || `${d.concepto || ''} ${d.monto ?? ''}`.trim() || 'Sin concepto');
+    const aiResult = await interpretarGastosConIA(textos);
     const saved = [];
-    for (const { fecha, monto, concepto } of datos) {
-      const categoria = identificarCategoria(concepto, '');
+    for (let i = 0; i < datos.length; i++) {
+      const d = datos[i];
+      const ai = aiResult?.[i];
+      const monto = (ai?.monto >= 0 ? Math.round(ai.monto * 100) / 100 : null) ?? d.monto ?? 0;
+      const categoria = ai?.categoria || identificarCategoria(d.concepto, '');
       const gasto = new Gasto({
         sessionId,
-        fecha,
+        fecha: d.fecha,
         monto,
-        concepto,
+        concepto: d.concepto,
         categoria,
         archivo: filename,
         textoExtraido: '',
@@ -64,13 +62,10 @@ router.post('/', (req, res, next) => {
   }
 });
 
-// GET /api/documentos/export/excel — exportar gastos a Excel (solo de la sesión)
 router.get('/export/excel', async (req, res) => {
   try {
-    const sessionId = req.headers['x-session-id'] || '';
-    if (!sessionId) {
-      return res.status(400).json({ ok: false, error: 'Falta identificador de sesión (header X-Session-Id)' });
-    }
+    const sessionId = requireSession(req, res);
+    if (!sessionId) return;
     const gastos = await Gasto.find({ sessionId }).sort({ creadoEn: -1 }).lean();
     const rows = [
       ['Fecha', 'Monto (MXN)', 'Concepto', 'Categoría', 'Archivo'],
@@ -94,7 +89,6 @@ router.get('/export/excel', async (req, res) => {
   }
 });
 
-// GET /api/documentos — listar solo los de la sesión actual
 router.get('/', async (req, res) => {
   try {
     const sessionId = req.headers['x-session-id'] || '';
@@ -105,7 +99,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/documentos/:id — uno por id (solo si pertenece a la sesión)
 router.get('/:id', async (req, res) => {
   try {
     const sessionId = req.headers['x-session-id'] || '';
@@ -118,7 +111,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/documentos/:id — eliminar gasto (solo si pertenece a la sesión)
 router.delete('/:id', async (req, res) => {
   try {
     const sessionId = req.headers['x-session-id'] || '';
