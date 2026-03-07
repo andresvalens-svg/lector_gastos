@@ -29,10 +29,11 @@ A) PRESUPUESTO / COTIZACIÓN / EVENTO / BODA (tabla con servicios)
    - Regla: "monto" = siempre la columna que sea el total a pagar por esa fila. Si hay dos números (ej. 3 y 49500), el monto es el grande (49500), no el unitario (3).
    - CONCEPTO: solo la descripción del servicio (ej. "Paquete Plata 3 tiempos...", "DJ Básico"). NUNCA "Concepto 3", "Concepto 5", "FECHA: ENERO", "HORA: PM A AM" ni listas "Incluye...".
 
-B) TICKET (super, gasolinera, restaurante, tienda)
-   - Pocas líneas; a veces sin columnas claras. Cada línea suele ser: descripción del producto/servicio + precio, o un solo total al final.
-   - CONCEPTO: lo que describe el ítem (ej. "Café americano", "Gasolina 95", "Total"). Si solo hay un total, concepto puede ser "Compra" o el nombre del establecimiento si aparece.
-   - MONTO: el precio o total de esa línea. Un solo número por ítem.
+B) TICKET / RESUMEN DEL PEDIDO / ORDER SUMMARY
+   - Puede ser tabla con columnas O bloques donde cada producto junta descripción + cantidad + precio en el mismo bloque.
+   - Si cada ítem tiene estructura como: "Envío de Documentos Institucionales... Cant: 1 pza(s) $300,00" → CONCEPTO = la descripción larga del producto/servicio (ej. "Envío de Documentos Institucionales en México Campus Monterrey"), NUNCA "Cant: 1 pza(s)" ni "Producto(s)" ni "Resumen del pedido".
+   - MONTO: el valor con $ o moneda (ej. $300,00 o $600,00). Formato puede ser coma o punto decimal.
+   - Sin columnas explícitas: la frase larga que describe el producto/servicio es el concepto; el número con $ es el monto.
 
 C) ESTADO DE CUENTA BANCARIO
    - Puede tener columnas: Fecha, Concepto/Descripción/Movimiento/Referencia, Cargos/Débitos/Retiros, Abonos/Créditos/Depósitos, Saldo. Con o sin líneas separadoras entre secciones.
@@ -45,14 +46,26 @@ D) RECIBO A MANO / NOTA / COMPROBANTE LIBRE
    - Texto libre, sin tabla: "Recibí $500 por concepto de...", "Pagado: renta marzo - $12000", listas con ítem y monto.
    - Extrae cada pago o ítem que tenga descripción y monto. CONCEPTO = lo que se pagó o recibió. MONTO = el valor. TIPO = "gasto" si es un pago, "ingreso" si es un cobro.
 
+E) FORMATO DESCONOCIDO O NO RECONOCIBLE (fallback universal)
+   - Si el documento no encaja claramente en A-D, usa esta heurística: busca cada PAR lógico (descripción + monto) en el texto.
+   - CONCEPTO: la frase más larga y coherente que describa un producto, servicio o movimiento (evita encabezados, "Cant:", "Total", números de fila).
+   - MONTO: cualquier número que represente un precio/importe (con $ o sin él). Suele ser el número más grande en la fila o el que esté junto a la descripción. Si hay varios, el que sea total de línea, no cantidad ni unitario.
+   - Acepta múltiples formatos de moneda: $300,00 / $300.00 / 300,00 / 300.00 / $1,234.56 / $1.234,56. El monto final debe ser número (sin símbolos).
+   - Ante duda: extrae el par (concepto + monto) que tenga más sentido. Es preferible incluir un ítem dudoso que omitirlo; el usuario puede corregir.
+
 === REGLAS UNIVERSALES ===
-1. CONCEPTO: siempre una descripción legible del ítem/movimiento. NUNCA uses como concepto: números de fila ("Concepto 3"), encabezados ("FECHA:", "HORA:", "Incluye"), la palabra "TOTAL" como único texto, ni nombres de columnas.
-2. MONTO: siempre el valor que representa el total a pagar o el movimiento (total de la línea/fila). Si hay varias columnas numéricas, elige la que sea el TOTAL/Importe final, no la unitaria ni la cantidad. Número positivo. Si está vacío o dice CORTESÍA/CLIENTE → 0.
+1. CONCEPTO: siempre la descripción del producto/servicio (la frase que explica QUÉ es). NUNCA uses como concepto: números de fila ("Concepto 3"), encabezados ("FECHA:", "HORA:", "Incluye", "Producto(s)", "Resumen del pedido"), líneas de cantidad ("Cant: 1 pza(s)"), la palabra "TOTAL" ni nombres de columnas. Si solo hay monto y no descripción clara → usa "Compra" o "Pago" como concepto.
+2. MONTO: siempre el valor que representa el total a pagar o el movimiento (total de la línea/fila). Si hay varias columnas numéricas, elige la que sea el TOTAL/Importe final, no la unitaria ni la cantidad. Número positivo (sin $ ni comas de miles). Acepta formatos: $300,00 → 300; $1.234,56 → 1234.56; $1,234.56 → 1234.56. Si está vacío o dice CORTESÍA/CLIENTE → 0.
 3. No crees ítems para: fila de TOTAL general, subtotales, encabezados, líneas en blanco, "Incluye" sin monto, separadores.
 4. FECHA: infiere del documento (ej. "Enero 2027" → 2027-01-01); si no hay, usa la fecha actual. Categoría: una de [${CATEGORIAS.join(', ')}].
 5. TIPO: en presupuestos/tickets/recibos de pago → "gasto". En estados de cuenta → según columna (Cargos=gasto, Abonos=ingreso). En recibos de cobro → "ingreso".
+6. TABLAS COMPLEJAS (celdas combinadas, varias columnas, layouts raros): extrae por FILA LÓGICA, no por posición de columna. Cada fila/ítem = un par (concepto + monto). Si la descripción ocupa varias líneas, une todo el texto en el concepto.
+7. TOLERANCIA A ERRORES: si el texto está corrupto o mal OCR, ignora caracteres ilegibles e infiere por contexto. Si detectas un ítem probable, inclúyelo antes que omitirlo.
+8. NOMBRES DE COLUMNAS EN CUALQUIER IDIOMA: Concepto/Descripción/Item/Producto/Servicio/Produto/Artikel/Service = columna de descripción. Importe/Total/Monto/Amount/Preis/Valor/Preço = columna de monto. Aplica la misma lógica: descripción → concepto, total → monto.
 
-Responde ÚNICAMENTE un JSON array, sin markdown. Un objeto por ítem/movimiento real. Ejemplo: [{"concepto":"Paquete Plata 3 tiempos...","monto":49500,"fecha":"2027-01-01","categoria":"Restaurantes","tipo":"gasto"},{"concepto":"Transferencia recibida","monto":15000,"fecha":"2027-01-15","categoria":"Bancos","tipo":"ingreso"}]
+Responde ÚNICAMENTE un JSON array válido, sin markdown ni explicaciones. Un objeto por ítem/movimiento real. Cada objeto: concepto (string), monto (número), fecha (YYYY-MM-DD), categoria (una de la lista), tipo ("gasto" o "ingreso"). Nunca devuelvas un array vacío si hay al menos un ítem con monto; si solo hay un total sin desglose, usa ese total con concepto "Compra" o "Total documento".
+
+Ejemplos: [{"concepto":"Envío de Documentos Institucionales en México Campus Monterrey","monto":300,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"},{"concepto":"Traducción de Certificado...","monto":600,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"}]
 
 TEXTO DEL DOCUMENTO:
 ---
