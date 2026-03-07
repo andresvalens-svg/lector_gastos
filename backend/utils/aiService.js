@@ -1,4 +1,4 @@
-// Gemini: extracción de documento y/o normalización. Sin GEMINI_API_KEY → fallback por palabras clave.
+// Claude o Gemini: extracción de documento y normalización. Prioridad: ANTHROPIC_API_KEY (Claude), luego GEMINI_API_KEY.
 export const CATEGORIAS = ['Supermercado', 'Restaurantes', 'Transporte', 'Servicios', 'Salud', 'Entretenimiento', 'Educación', 'Hogar', 'Bancos', 'Otros'];
 
 function normalizarCategoria(cat) {
@@ -10,6 +10,50 @@ function normalizarCategoria(cat) {
 function normalizarTipo(t) {
   if (t === 'ingreso') return 'ingreso';
   return 'gasto';
+}
+
+/** Llama a Claude o Gemini con el prompt. Retorna texto o null. */
+async function llamarIA(prompt) {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (anthropicKey) {
+    try {
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey: anthropicKey });
+      const message = await client.messages.create({
+        model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const block = message.content?.find((b) => b.type === 'text');
+      return block?.text?.trim() || null;
+    } catch (err) {
+      console.error('[aiService] Claude', err.message);
+      if (geminiKey) {
+        try {
+          const { GoogleGenerativeAI } = await import('@google/generative-ai');
+          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
+          const res = (await model.generateContent(prompt)).response;
+          return res.text?.trim() || null;
+        } catch (e) {
+          console.error('[aiService] Gemini fallback', e.message);
+        }
+      }
+      return null;
+    }
+  }
+  if (geminiKey) {
+    try {
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
+      const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
+      const res = (await model.generateContent(prompt)).response;
+      return res.text?.trim() || null;
+    } catch (err) {
+      console.error('[aiService] Gemini', err.message);
+      return null;
+    }
+  }
+  return null;
 }
 
 /** Parsea monto aunque venga como "300,00" o "1.234,56" (coma decimal). Number("300,00") = NaN, por eso fallaba. */
@@ -30,7 +74,7 @@ function parsearMontoRobusto(val) {
 
 /** Extrae del texto de un PDF/comprobante cada ítem con su fecha, monto y categoría. No incluye la línea TOTAL. */
 export async function extraerConceptosDeDocumento(texto) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey || !texto?.trim()) return null;
 
   const prompt = `El texto siguiente puede ser CUALQUIERA de estos tipos de documento. Debes detectar el tipo y extraer ítems (concepto, monto, fecha, categoria, tipo) aplicando las reglas que correspondan.
@@ -89,9 +133,7 @@ ${texto.slice(0, 30000)}
 ---`;
 
   try {
-    const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
-    const content = (await model.generateContent(prompt)).response.text?.trim();
+    const content = await llamarIA(prompt);
     if (!content) return null;
     let jsonStr = content.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1]?.trim() || content;
     const arrayMatch = jsonStr.match(/\[\s*[\s\S]*\s*\]/);
@@ -115,7 +157,7 @@ ${texto.slice(0, 30000)}
 }
 
 export async function interpretarGastosConIA(textos) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey || !textos?.length) return null;
 
   const prompt = `Lista de líneas (gastos o movimientos de cuenta). En cada línea puede haber concepto y monto (ej. 1.234,56 o -500 o 1,234.56).
@@ -129,9 +171,7 @@ Líneas:
 ${textos.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
 
   try {
-    const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
-    const content = (await model.generateContent(prompt)).response.text?.trim();
+    const content = await llamarIA(prompt);
     if (!content) return null;
     const jsonStr = content.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1]?.trim() || content;
     const arr = JSON.parse(jsonStr);
