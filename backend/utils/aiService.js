@@ -12,6 +12,22 @@ function normalizarTipo(t) {
   return 'gasto';
 }
 
+/** Parsea monto aunque venga como "300,00" o "1.234,56" (coma decimal). Number("300,00") = NaN, por eso fallaba. */
+function parsearMontoRobusto(val) {
+  if (val == null) return 0;
+  const n = Number(val);
+  if (!Number.isNaN(n)) return Math.abs(n);
+  const s = String(val).replace(/\s/g, '').replace(/[$€MXN]/g, '');
+  if (!s) return 0;
+  const eu = s.match(/^[\d.]+\s*,\s*\d+$/); // 1.234,56
+  const us = s.match(/^[\d,]+\.\d+$/); // 1,234.56
+  if (eu) return Math.abs(parseFloat(s.replace(/\./g, '').replace(',', '.')));
+  if (us) return Math.abs(parseFloat(s.replace(/,/g, '')));
+  const simple = s.replace(',', '.');
+  const parsed = parseFloat(simple);
+  return Number.isNaN(parsed) ? 0 : Math.abs(parsed);
+}
+
 /** Extrae del texto de un PDF/comprobante cada ítem con su fecha, monto y categoría. No incluye la línea TOTAL. */
 export async function extraerConceptosDeDocumento(texto) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -87,7 +103,7 @@ ${texto.slice(0, 30000)}
       .filter((item) => item && (item.concepto != null || item.monto != null))
       .map((item) => ({
         concepto: String(item?.concepto ?? '').trim() || 'Sin concepto',
-        monto: Math.max(0, Math.abs(Number(item?.monto) || 0)),
+        monto: Math.max(0, parsearMontoRobusto(item?.monto)),
         fecha: item?.fecha ? new Date(item.fecha) : new Date(),
         categoria: normalizarCategoria(item?.categoria),
         tipo: normalizarTipo(item?.tipo),
@@ -121,7 +137,7 @@ ${textos.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
     const arr = JSON.parse(jsonStr);
     if (!Array.isArray(arr) || arr.length !== textos.length) return null;
     return arr.map((item) => ({
-      monto: Math.max(0, Math.abs(Number(item?.monto) || 0)),
+      monto: Math.max(0, parsearMontoRobusto(item?.monto)),
       categoria: normalizarCategoria(item?.categoria),
       tipo: normalizarTipo(item?.tipo),
     }));
