@@ -21,7 +21,7 @@ async function llamarIA(prompt) {
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({ apiKey: anthropicKey });
       const message = await client.messages.create({
-        model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
         max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }],
       });
@@ -32,7 +32,7 @@ async function llamarIA(prompt) {
       if (geminiKey) {
         try {
           const { GoogleGenerativeAI } = await import('@google/generative-ai');
-          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
+          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.0-flash' });
           const res = (await model.generateContent(prompt)).response;
           return res.text?.trim() || null;
         } catch (e) {
@@ -45,7 +45,7 @@ async function llamarIA(prompt) {
   if (geminiKey) {
     try {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
-      const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
+      const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.0-flash' });
       const res = (await model.generateContent(prompt)).response;
       return res.text?.trim() || null;
     } catch (err) {
@@ -135,11 +135,17 @@ ${texto.slice(0, 50000)}
   try {
     const content = await llamarIA(prompt);
     if (!content) return null;
+    if (process.env.DEBUG_EXTRACCION === '1') {
+      console.log('[DEBUG extraerConceptosDeDocumento] RAW AI response (primeros 1500 chars):', content.slice(0, 1500));
+    }
     let jsonStr = content.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1]?.trim() || content;
     const arrayMatch = jsonStr.match(/\[\s*[\s\S]*\s*\]/);
     if (arrayMatch) jsonStr = arrayMatch[0];
     jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
     const arr = JSON.parse(jsonStr);
+    if (process.env.DEBUG_EXTRACCION === '1') {
+      console.log('[DEBUG] parsed arr:', JSON.stringify(arr.slice(0, 5).map((i) => ({ concepto: i?.concepto?.slice(0, 40), monto_raw: i?.monto, monto_type: typeof i?.monto })), null, 2));
+    }
     if (!Array.isArray(arr) || arr.length === 0) return null;
     return arr
       .filter((item) => item && (item.concepto != null || item.monto != null))

@@ -42,7 +42,29 @@ export async function extraerTexto(buffer, mimetype) {
 
 async function extraerTextoPdf(buffer) {
   const data = await pdfParse(buffer, { max: 0 });
-  return (data.text || '').trim();
+  let texto = (data.text || '').trim();
+  if (texto) return texto;
+  if (process.env.DEBUG_EXTRACCION === '1') {
+    console.log('[DEBUG extraerTextoPdf] Sin texto, intentando OCR fallback. numpages:', data.numpages);
+  }
+  if (data.numpages > 0) {
+    try {
+      const { pdf } = await import('pdf-to-img');
+      const doc = await pdf(buffer, { scale: 2 });
+      const partes = [];
+      for await (const pageBuffer of doc) {
+        const { data: ocr } = await Tesseract.recognize(pageBuffer, 'spa+eng');
+        if (ocr?.text?.trim()) partes.push(ocr.text.trim());
+      }
+      texto = partes.join('\n\n');
+      if (process.env.DEBUG_EXTRACCION === '1' && texto) {
+        console.log('[DEBUG extraerTextoPdf] OCR extrajo', texto.length, 'chars');
+      }
+    } catch (err) {
+      if (process.env.DEBUG_EXTRACCION === '1') console.log('[DEBUG extraerTextoPdf] OCR fallback error:', err.message);
+    }
+  }
+  return texto || '';
 }
 
 async function extraerTextoImagen(buffer) {
