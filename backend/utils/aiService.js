@@ -127,9 +127,9 @@ Responde ÚNICAMENTE un JSON array válido, sin markdown ni explicaciones. Un ob
 
 Ejemplos de formato: [{"concepto":"Envío de Documentos Institucionales...","monto":300,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"},{"concepto":"Traducción de Certificado...","monto":600,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"}]
 
-TEXTO DEL DOCUMENTO:
+TEXTO DEL DOCUMENTO (extraído de todas las páginas del PDF/documento):
 ---
-${texto.slice(0, 30000)}
+${texto.slice(0, 50000)}
 ---`;
 
   try {

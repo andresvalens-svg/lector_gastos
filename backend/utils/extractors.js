@@ -41,8 +41,8 @@ export async function extraerTexto(buffer, mimetype) {
 }
 
 async function extraerTextoPdf(buffer) {
-  const data = await pdfParse(buffer);
-  return data.text || '';
+  const data = await pdfParse(buffer, { max: 0 });
+  return (data.text || '').trim();
 }
 
 async function extraerTextoImagen(buffer) {
