@@ -96,11 +96,11 @@ B) TICKET / RESUMEN DEL PEDIDO / ORDER SUMMARY
    - Sin columnas explícitas: la frase larga que describe el producto/servicio es el concepto; el número con $ es el monto.
 
 C) ESTADO DE CUENTA BANCARIO
-   - Puede tener columnas: Fecha, Concepto/Descripción/Movimiento/Referencia, Cargos/Débitos/Retiros, Abonos/Créditos/Depósitos, Saldo. Con o sin líneas separadoras entre secciones.
-   - Cada fila de movimiento = un ítem. CONCEPTO = la descripción del movimiento (ej. "Transferencia recibida", "Pago con tarjeta").
-   - MONTO: el valor en la columna que tenga el número (Cargos o Abonos). Usa valor absoluto (siempre positivo).
-   - TIPO: si el monto está en Cargos/Débitos/Retiros → "gasto". Si está en Abonos/Créditos/Depósitos → "ingreso".
-   - No crees ítems para: encabezados, líneas de "Saldo anterior", "Saldo", subtotales, ni filas que sean solo separadores o guiones.
+   - Identifica la columna de CARGOS (Cargos, Retiros, Débitos, Salidas). Extrae SOLO las filas con valor ahí.
+   - Identifica la columna de ABONOS (Abonos, Depósitos, Créditos) e IGNÓRALA completamente: no crees ítems de esa columna.
+   - CONCEPTO = la descripción del movimiento (ej. "Uber Trip", "Restaurante X"). TIPO = "gasto" para Cargos.
+   - MONTO = valor en columna Cargos. Siempre positivo.
+   - No crees ítems para: encabezados, Saldo anterior, Saldo, subtotales, separadores. Si hay sección Summary y Detail, usa SOLO Detail.
 
 D) RECIBO A MANO / NOTA / COMPROBANTE LIBRE
    - Texto libre, sin tabla: "Recibí $500 por concepto de...", "Pagado: renta marzo - $12000", listas con ítem y monto.
@@ -126,6 +126,12 @@ E) FORMATO DESCONOCIDO O NO RECONOCIBLE (fallback universal)
 Responde ÚNICAMENTE un JSON array válido, sin markdown ni explicaciones. Un objeto por ítem/movimiento real. Cada objeto: concepto (string descriptivo del producto/servicio, nunca "0" ni solo números), monto (número positivo: el valor que tenga el documento para ese ítem, sea cual sea). Extrae CADA monto numérico que represente un precio/importe en el documento y asígnale su concepto correspondiente. Nunca devuelvas monto: 0 para productos/servicios que tengan precio en el texto; usa siempre el número real que aparece ($X, XX → X; $1.234,56 → 1234.56, etc.).
 
 Ejemplos de formato: [{"concepto":"Envío de Documentos Institucionales...","monto":300,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"},{"concepto":"Traducción de Certificado...","monto":600,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"}]
+
+=== IMPORTANTE (LEE ESTO) ===
+NOTA 1: NUNCA uses como concepto metadatos, identificadores ni encabezados: Company Number, VAT Number, Order Number, Order #, Receipt #, Invoice ID, URLs (https://), direcciones (London, Street, House), Card ending, Payment method, Billing date, Billing period. Si una línea contiene SOLO eso, NO la incluyas.
+NOTA 2: Si el documento tiene sección "Summary" y sección "Detail", extrae SOLO de la sección detallada. No dupliques entradas.
+NOTA 3: Si un concepto dice "Don't consider", "No ingresar", "No contar", "retiro del dueño", etc., NO lo incluyas aunque tenga monto.
+NOTA 4: Responde SOLO con el JSON, sin explicaciones ni markdown.
 
 TEXTO DEL DOCUMENTO (extraído de todas las páginas del PDF/documento):
 ---

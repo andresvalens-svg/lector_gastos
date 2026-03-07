@@ -315,7 +315,20 @@ function extraerConcepto(texto) {
   return primera.slice(0, 200);
 }
 
-/** Extrae varios conceptos de un texto libre (PDF, imagen, HTML): cada línea con monto → un gasto. */
+/** Indica si el concepto/monto es metadato (no un producto/servicio real). Evita Company Number, VAT, URLs, etc. */
+function esMetadato(concepto, monto, linea) {
+  const c = (concepto || '').toLowerCase();
+  const l = (linea || '').toLowerCase();
+  if (/company number|vat number|order number|receipt #|invoice\/|https?:\/\//.test(c) || /https?:\/\//.test(l)) return true;
+  if (/card ending|payment method|billing date|billing period|paddle\.com|\.net\*/.test(c)) return true;
+  if (monto > 100000) return true;
+  if (/^concepto \d+$/i.test(concepto) && /^[\d\s,\.]+$/.test(linea.replace(/[€$£,\s]/g, '').slice(0, 30))) return true;
+  if (c.length < 5 && /^(number|no\.|#|vat|nif):?$/i.test(c.trim())) return true;
+  if (/street|house|london|ec\s*v|mora\s*street|^\/\/\s*:/.test(c) && monto < 50) return true;
+  return false;
+}
+
+/** Extrae varios conceptos de un texto libre (PDF, imagen, HTML): cada línea con monto → un gasto. Filtra metadatos. */
 function parsearMultiplesConceptos(texto) {
   if (!texto || !String(texto).trim()) return [];
   const fechaGlobal = buscarEnTexto(texto, parsearFecha, 150) || new Date();
@@ -331,6 +344,7 @@ function parsearMultiplesConceptos(texto) {
       .trim();
     if (!concepto || concepto.length < 2) concepto = `Concepto ${resultados.length + 1}`;
     concepto = concepto.slice(0, 200);
+    if (esMetadato(concepto, monto, linea)) continue;
     resultados.push({ fecha: fechaGlobal, monto, concepto, textoOriginal: linea });
   }
   return resultados;
