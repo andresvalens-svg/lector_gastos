@@ -47,21 +47,31 @@ async function extraerTextoPdf(buffer) {
   if (process.env.DEBUG_EXTRACCION === '1') {
     console.log('[DEBUG extraerTextoPdf] Sin texto, intentando OCR fallback. numpages:', data.numpages);
   }
-  if (data.numpages > 0) {
+  if (data.numpages > 0 && process.env.DISABLE_PDF_OCR !== '1') {
+    const OCR_TIMEOUT_MS = parseInt(process.env.PDF_OCR_TIMEOUT_MS, 10) || 45000;
+    const MAX_PAGES = 5;
     try {
-      const { pdf } = await import('pdf-to-img');
-      const doc = await pdf(buffer, { scale: 2 });
-      const partes = [];
-      for await (const pageBuffer of doc) {
-        const { data: ocr } = await Tesseract.recognize(pageBuffer, 'spa+eng');
-        if (ocr?.text?.trim()) partes.push(ocr.text.trim());
-      }
-      texto = partes.join('\n\n');
+      const ocrPromise = (async () => {
+        const { pdf } = await import('pdf-to-img');
+        const doc = await pdf(buffer, { scale: 2 });
+        const partes = [];
+        let pageNum = 0;
+        for await (const pageBuffer of doc) {
+          if (++pageNum > MAX_PAGES) break;
+          const { data: ocr } = await Tesseract.recognize(pageBuffer, 'spa+eng');
+          if (ocr?.text?.trim()) partes.push(ocr.text.trim());
+        }
+        return partes.join('\n\n');
+      })();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('OCR timeout')), OCR_TIMEOUT_MS)
+      );
+      texto = await Promise.race([ocrPromise, timeoutPromise]);
       if (process.env.DEBUG_EXTRACCION === '1' && texto) {
         console.log('[DEBUG extraerTextoPdf] OCR extrajo', texto.length, 'chars');
       }
     } catch (err) {
-      if (process.env.DEBUG_EXTRACCION === '1') console.log('[DEBUG extraerTextoPdf] OCR fallback error:', err.message);
+      if (process.env.DEBUG_EXTRACCION === '1') console.log('[DEBUG extraerTextoPdf] OCR fallback:', err.message);
     }
   }
   return texto || '';

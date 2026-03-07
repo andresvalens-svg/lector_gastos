@@ -26,6 +26,7 @@ router.post('/', (req, res, next) => {
     next();
   });
 }, async (req, res) => {
+  req.setTimeout(parseInt(process.env.UPLOAD_TIMEOUT_MS, 10) || 120000);
   try {
     const sessionId = requireSession(req, res);
     if (!sessionId) return;
