@@ -39,7 +39,7 @@ router.post('/', (req, res, next) => {
     if (isDocText) {
       const texto = await extraerTexto(buffer, mime);
       const extraidos = texto?.trim() ? await extraerConceptosDeDocumento(texto) : null;
-      if (extraidos?.length) {
+      if (extraidos?.length && extraidos.some((e) => (e.monto ?? 0) > 0)) {
         datos = extraidos.map((e) => ({ ...e, textoOriginal: (e.concepto || '') + ' ' + (e.monto ?? '') }));
       } else {
         datos = await extraerDatos(buffer, mimetype, filename);

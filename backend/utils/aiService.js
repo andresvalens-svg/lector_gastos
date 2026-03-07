@@ -123,9 +123,9 @@ E) FORMATO DESCONOCIDO O NO RECONOCIBLE (fallback universal)
 7. TOLERANCIA A ERRORES: si el texto está corrupto o mal OCR, ignora caracteres ilegibles e infiere por contexto. Si detectas un ítem probable, inclúyelo antes que omitirlo.
 8. NOMBRES DE COLUMNAS EN CUALQUIER IDIOMA: Concepto/Descripción/Item/Producto/Servicio/Produto/Artikel/Service = columna de descripción. Importe/Total/Monto/Amount/Preis/Valor/Preço = columna de monto. Aplica la misma lógica: descripción → concepto, total → monto.
 
-Responde ÚNICAMENTE un JSON array válido, sin markdown ni explicaciones. Un objeto por ítem/movimiento real. Cada objeto: concepto (string), monto (número), fecha (YYYY-MM-DD), categoria (una de la lista), tipo ("gasto" o "ingreso"). Nunca devuelvas un array vacío si hay al menos un ítem con monto; si solo hay un total sin desglose, usa ese total con concepto "Compra" o "Total documento".
+Responde ÚNICAMENTE un JSON array válido, sin markdown ni explicaciones. Un objeto por ítem/movimiento real. Cada objeto: concepto (string descriptivo del producto/servicio, nunca "0" ni solo números), monto (número positivo: el valor que tenga el documento para ese ítem, sea cual sea). Extrae CADA monto numérico que represente un precio/importe en el documento y asígnale su concepto correspondiente. Nunca devuelvas monto: 0 para productos/servicios que tengan precio en el texto; usa siempre el número real que aparece ($X, XX → X; $1.234,56 → 1234.56, etc.).
 
-Ejemplos: [{"concepto":"Envío de Documentos Institucionales en México Campus Monterrey","monto":300,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"},{"concepto":"Traducción de Certificado...","monto":600,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"}]
+Ejemplos de formato: [{"concepto":"Envío de Documentos Institucionales...","monto":300,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"},{"concepto":"Traducción de Certificado...","monto":600,"fecha":"2027-01-01","categoria":"Servicios","tipo":"gasto"}]
 
 TEXTO DEL DOCUMENTO:
 ---
@@ -143,13 +143,18 @@ ${texto.slice(0, 30000)}
     if (!Array.isArray(arr) || arr.length === 0) return null;
     return arr
       .filter((item) => item && (item.concepto != null || item.monto != null))
-      .map((item) => ({
-        concepto: String(item?.concepto ?? '').trim() || 'Sin concepto',
-        monto: Math.max(0, parsearMontoRobusto(item?.monto)),
+      .map((item) => {
+        let concepto = String(item?.concepto ?? '').trim();
+        if (!concepto || /^[\d.,]+$/.test(concepto) || concepto === '0') concepto = 'Sin concepto';
+        const monto = Math.max(0, parsearMontoRobusto(item?.monto));
+        return {
+        concepto,
+        monto,
         fecha: item?.fecha ? new Date(item.fecha) : new Date(),
         categoria: normalizarCategoria(item?.categoria),
         tipo: normalizarTipo(item?.tipo),
-      }));
+      };
+      });
   } catch (err) {
     console.error('[aiService] extraerConceptosDeDocumento', err.message);
     return null;
